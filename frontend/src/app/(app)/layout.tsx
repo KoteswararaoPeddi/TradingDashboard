@@ -1,8 +1,7 @@
-import { AppShell } from "@components/AppShell"
+import { DashboardShell } from "@features/dashboard/components/shell/DashboardShell";
 
-// Server layout: wraps the app chrome (client) around server-rendered pages. Open app — no guard.
-export default function AppLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  return <AppShell>{children}</AppShell>
+// Server layout: the cockpit chrome (client) wraps server-rendered pages, so page
+// content stays a Server Component via the children slot. Open app — no guard.
+export default function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <DashboardShell>{children}</DashboardShell>;
 }

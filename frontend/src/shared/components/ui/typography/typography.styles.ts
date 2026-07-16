@@ -36,6 +36,7 @@ export const typography = cva('', {
       semibold:  'font-semibold',
       bold:      'font-bold',
       extrabold: 'font-extrabold',
+      black:     'font-black',
     },
   },
   defaultVariants: {

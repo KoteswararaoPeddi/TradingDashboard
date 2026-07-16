@@ -40,29 +40,34 @@ keeps only a minimal cross-cutting logger:
   `trades.service`). Every service returns typed domain data (raw trades — the metrics are derived on
   the client, not by the service).
 
-## Chart.js (`react-chartjs-2`)
+## recharts
 
 The dashboard's seven charts (equity curve, daily/weekday/hourly/asset/direction bars, win/loss
-doughnut). The design uses Chart.js directly; we wrap it with `react-chartjs-2`.
+donut). The reference design draws them with Chart.js; we render the same charts with **recharts**,
+which composes as React components.
+
+**Why recharts here:** it renders **SVG**, and SVG `fill`/`stroke` accept `var(--color-up)` directly.
+Chart colours therefore read the **same semantic tokens as every other component**, with no second
+copy of the palette living in JS — and the accent themes restyle charts for free. A canvas library
+would force literal colour strings in JS, which the token rules forbid.
 
 **Rules:**
 
-- **Dynamic-import every chart** (`next/dynamic`, `{ ssr: false }`) — Chart.js is heavy and needs the
-  browser `canvas`. Keep charts out of first paint and off the server.
-- **Register only what you use** (`Chart.register(LineElement, BarElement, ArcElement, …)`) — don't
-  pull in `chart.js/auto` (it bundles everything). One registration module, imported by the wrappers.
-- **Read colors from the token CSS vars**, never a hardcoded palette copy. Signed data (daily/weekday/
-  hourly/asset/direction) colors each bar by sign: **up = green, down = red**. The equity line uses
-  brand/blue with a green→transparent gradient fill; the doughnut uses green/red/grey for
-  wins/losses/breakeven; long-vs-short uses green/blue/red. When the accent theme changes, charts
-  restyle because the vars change.
-- **Shared chart defaults** (`shared/config/chart-theme.ts`): `responsive: true,
-  maintainAspectRatio: false`, dark grid (`rgba(255,255,255,.055)`), muted ticks, tooltip on the
-  surface color, money-formatted axis/labels. Each chart passes only its data + type-specific options.
-- **Destroy/rebuild on data change** is handled by `react-chartjs-2` via the `data` prop — pass fresh
-  data derived from the metric bundle; don't hold a manual Chart instance.
-- Chart bodies have a **fixed height** (the Panel `chart-body`) so `maintainAspectRatio: false` fills
-  it; the wide equity panel is taller.
+- **Colours come from tokens, always** — `fill="var(--color-up)"` / `stroke="var(--color-info)"`.
+  Never a hex literal or a JS palette object in chart code.
+- **Signed data is coloured by sign** (daily / weekday / hourly / asset): map each datum to a
+  `<Cell fill={value >= 0 ? "var(--color-up)" : "var(--color-down)"} />` inside `<Bar>`. A single
+  `fill` on `<Bar>` cannot express per-bar colour.
+- **Mark chart components `"use client"`** and load them with `next/dynamic`. recharts is heavy, and
+  `ResponsiveContainer` measures the DOM — server rendering it produces hydration noise for no gain.
+- **`ResponsiveContainer` needs a sized parent.** It resolves to zero height inside an auto-height
+  box and the chart silently vanishes. The Panel chart body sets a fixed height (340px, 390px for the
+  wide equity panel), which satisfies it.
+- **Shared defaults** live in `shared/config/chart-theme.ts` (grid stroke, tick fill, tooltip
+  surface, money formatter) so all seven charts read one source rather than repeating props.
+- Chart type mapping: equity curve → `AreaChart` + `<defs><linearGradient>` with `type="monotone"`;
+  daily/weekday/hourly/direction → `BarChart`; asset performance → `BarChart layout="vertical"`;
+  win/loss → `PieChart` + `<Pie innerRadius="68%">` for the donut.
 
 ## shadcn/ui (Radix + Base UI)
 

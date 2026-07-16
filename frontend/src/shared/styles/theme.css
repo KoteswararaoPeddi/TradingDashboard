@@ -1,12 +1,21 @@
 /* ============================================================
-   FOUNDATION — palette tokens → generates Tailwind utilities
-   e.g. bg-brand-600, text-neutral-900, border-red-300
+   1. FOUNDATION — the palette.
+
+      Every raw colour value in the app is defined here and nowhere
+      else. Values are transcribed from the reference design's :root
+      (context/designs/website.index.html).
+
+      Nothing below this block may contain a literal colour: the
+      semantic layer references these by var() only.
    ============================================================ */
 @theme {
-  /* Font families → generate font-sans (Inter base) and font-display (Playfair italic accents).
-     The var(--font-*) refs are set on <html> by next/font in the root layout. */
+  /* Font — Inter only. The var(--font-inter) ref is set on <html> by next/font.
+     `heading` and `body` are aliases, not a second typeface: the Typography
+     primitive's variants emit font-heading / font-body, and without these tokens
+     those classes resolve to nothing. Both point at Inter by design. */
   --font-sans:    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
+  --font-heading: var(--font-sans);
+  --font-body:    var(--font-sans);
 
   /* Typography scale → generates text-display-2xl, text-h1, text-body-base, etc. */
   --text-display-2xl: 52px;
@@ -26,245 +35,149 @@
   --text-label-sm:    11px;
   --text-caption:     11px;
 
-  /* Brand — Teal */
-  --color-brand-50:  #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-200: #99f6e4;
-  --color-brand-300: #5eead4;
-  --color-brand-400: #2dd4bf;
-  --color-brand-500: #14b8a6;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
-  --color-brand-900: #134e4a;
-  --color-brand-950: #042f2e;
+  /* --- Ink: the dark surface ramp (design --bg, --surface, --surface-2, --surface-3) --- */
+  --color-ink-975: #030407; /* background gradient end */
+  --color-ink-950: #05070b; /* page background         */
+  --color-ink-940: #080c12; /* background gradient mid */
+  --color-ink-930: #060910; /* scrollbar track         */
+  --color-ink-900: #080d14; /* form field wells        */
+  --color-ink-800: #0b1018; /* panels                  */
+  --color-ink-700: #101722; /* raised tiles            */
+  --color-ink-600: #151f2e; /* overlays                */
+  --color-ink-500: #243142; /* scrollbar thumb         */
 
-  /* Neutral — Slate */
-  --color-neutral-50:  #f8fafc;
-  --color-neutral-100: #f1f5f9;
-  --color-neutral-200: #e2e8f0;
-  --color-neutral-300: #cbd5e1;
-  --color-neutral-400: #94a3b8;
-  --color-neutral-500: #64748b;
-  --color-neutral-600: #475569;
-  --color-neutral-700: #334155;
-  --color-neutral-800: #1e293b;
-  --color-neutral-900: #0f172a;
-  --color-neutral-950: #020617;
+  /* --- Slate: the text ramp (design --text, --muted, --muted-2) --- */
+  --color-slate-50:  #f4f7fb;
+  --color-slate-300: #8d99aa;
+  --color-slate-500: #667085;
 
-  /* Red */
-  --color-red-50:  #fef2f2;
-  --color-red-100: #fee2e2;
-  --color-red-200: #fecaca;
-  --color-red-300: #fca5a5;
-  --color-red-400: #f87171;
-  --color-red-500: #ef4444;
-  --color-red-600: #dc2626;
-  --color-red-700: #b91c1c;
-  --color-red-800: #991b1b;
-  --color-red-900: #7f1d1d;
+  /* --- Accent hues (design --accent-2, --accent, --accent-3, --purple) --- */
+  --color-brand:     #16d18d; /* teal-green                        */
+  --color-teal:      #31d0aa; /* brand hue under the gold theme    */
+  --color-blue:      #4f8cff;
+  --color-blue-soft: #6ea8ff; /* tertiary under violet/gold themes */
+  --color-gold:      #f4b15e;
+  --color-purple:    #b28cff;
 
-  /* Amber */
-  --color-amber-50:  #fffbeb;
-  --color-amber-100: #fef3c7;
-  --color-amber-200: #fde68a;
-  --color-amber-300: #fcd34d;
-  --color-amber-400: #fbbf24;
-  --color-amber-500: #f59e0b;
-  --color-amber-600: #d97706;
-  --color-amber-700: #b45309;
-  --color-amber-800: #92400e;
-  --color-amber-900: #78350f;
+  /* --- P&L direction: the core colour language (design --green, --red) ---
+     Named profit/loss, not up/down: the semantic layer owns `--up`/`--down`, and
+     `@theme inline` re-exports those as `--color-up`/`--color-down` to generate
+     the utilities. A palette entry sharing either name would make the bridge
+     reference itself, and the variable would silently resolve to nothing. */
+  --color-profit: #37d98b;
+  --color-loss:   #ff627c;
 
-  /* Green */
-  --color-green-50:  #f0fdf4;
-  --color-green-100: #dcfce7;
-  --color-green-200: #bbf7d0;
-  --color-green-300: #86efac;
-  --color-green-400: #4ade80;
-  --color-green-500: #22c55e;
-  --color-green-600: #16a34a;
-  --color-green-700: #15803d;
-  --color-green-800: #166534;
-  --color-green-900: #14532d;
+  /* --- Chip fills (design .shortBadge, .resultBadge.flat) --- */
+  --color-short: #9dbbff;
+  --color-flat:  #c4c9d4;
 
-  /* Blue */
-  --color-blue-50:  #eff6ff;
-  --color-blue-100: #dbeafe;
-  --color-blue-200: #bfdbfe;
-  --color-blue-300: #93c5fd;
-  --color-blue-400: #60a5fa;
-  --color-blue-500: #3b82f6;
-  --color-blue-600: #2563eb;
-  --color-blue-700: #1d4ed8;
-  --color-blue-800: #1e40af;
-  --color-blue-900: #1e3a8a;
+  /* --- Ink shades used as text on top of accent fills (design badge colours) --- */
+  --color-ink-on-brand: #06100c;
+  --color-ink-on-blue:  #0d1018;
+  --color-ink-on-up:    #0b1d15;
+  --color-ink-on-down:  #23050b;
+  --color-ink-on-gold:  #26170a;
+  --color-ink-on-flat:  #10151f;
 
-  /* Emerald Teal — Primary Brand */
-  --color-emerald-teal-50:  #eefbf7;
-  --color-emerald-teal-100: #d5f5eb;
-  --color-emerald-teal-200: #adead7;
-  --color-emerald-teal-300: #7fdcbc;
-  --color-emerald-teal-400: #4dc99f;
-  --color-emerald-teal-500: #20b286; /* Base Color */
-  --color-emerald-teal-600: #17936f;
-  --color-emerald-teal-700: #12765a;
-  --color-emerald-teal-800: #0f5d48;
-  --color-emerald-teal-900: #0d4b3a;
-  --color-emerald-teal-950: #072a20;
+  /* --- Alphas: borders over dark are alpha-white, not a grey step --- */
+  --color-hairline:        rgb(255 255 255 / 0.09);
+  --color-hairline-strong: rgb(255 255 255 / 0.16);
+  --color-hairline-soft:   rgb(255 255 255 / 0.06);  /* inner wells               */
+  --color-hairline-tile:   rgb(255 255 255 / 0.075); /* market/stat tiles         */
+  --color-grid-line:       rgb(255 255 255 / 0.025); /* app background grid       */
+  --color-chart-grid:      rgb(255 255 255 / 0.055); /* chart cartesian grid      */
 
-  /* Cyprus — Secondary Brand */
-  --color-charcoal-black-50:  #f5f7f8;
-  --color-charcoal-black-100: #e8ecef;
-  --color-charcoal-black-200: #d1d9df;
-  --color-charcoal-black-300: #b0bcc6;
-  --color-charcoal-black-400: #8697a5;
-  --color-charcoal-black-500: #657684;
-  --color-charcoal-black-600: #4d5b66;
-  --color-charcoal-black-700: #39434b;
-  --color-charcoal-black-800: #252c31;
-  --color-charcoal-black-900: #0f1418;
-  --color-charcoal-black-950: #070a0c;
+  /* --- Translucent surfaces layered over the ink ramp. Alpha rather than solid,
+     so the app's background grid stays faintly visible through every panel. --- */
+  --color-wash-strong: rgb(255 255 255 / 0.058); /* panel wash start, nav hover  */
+  --color-wash:        rgb(255 255 255 / 0.05);  /* quiet button / chip surface  */
+  --color-wash-soft:   rgb(255 255 255 / 0.025); /* panel wash end, empty state  */
+  --color-tile:        rgb(7 11 17 / 0.72);      /* market + stat tiles          */
+  --color-well:        rgb(0 0 0 / 0.22);        /* account-card minis           */
+  --color-well-soft:   rgb(0 0 0 / 0.18);        /* account strip, table body    */
 
-  /* Surf Crest — Secondary Brand Light */
-  --color-surf-crest-50:  #f5f8f0;
-  --color-surf-crest-100: #e9f1de;
-  --color-surf-crest-200: #c1d6a4;
-  --color-surf-crest-300: #9ec47e;
-  --color-surf-crest-400: #7aaf5a;
-  --color-surf-crest-500: #5b9040;
-  --color-surf-crest-600: #457130;
-  --color-surf-crest-700: #335426;
-  --color-surf-crest-800: #26401c;
-  --color-surf-crest-900: #1a2d13;
-  --color-surf-crest-950: #0f1b0b;
-
-  /* Aqua Spring — Accent */
-  --color-aqua-spring-50:  #e0f5ec;
-  --color-aqua-spring-100: #c0ebd8;
-  --color-aqua-spring-200: #90d6b5;
-  --color-aqua-spring-300: #5abb8e;
-  --color-aqua-spring-400: #34a06f;
-  --color-aqua-spring-500: #1c8457;
-  --color-aqua-spring-600: #146a44;
-  --color-aqua-spring-700: #0e5034;
-  --color-aqua-spring-800: #0a3d28;
-  --color-aqua-spring-900: #072c1d;
-  --color-aqua-spring-950: #041c12;
-
-  /* Violet — MediNex+ Primary Brand (matches the landing design #7C3AED family) */
-  --color-violet-50:  #f5f3ff;
-  --color-violet-100: #ede9fe;
-  --color-violet-200: #ddd6fe;
-  --color-violet-300: #c4b5fd;
-  --color-violet-400: #a78bfa;
-  --color-violet-500: #8b5cf6;
-  --color-violet-600: #7c3aed; /* Base brand */
-  --color-violet-700: #6d28d9;
-  --color-violet-800: #5b21b6;
-  --color-violet-900: #4c1d95;
-  --color-violet-950: #2e1065;
-
-  /* Purple — legacy UI scale (retained) */
-  --color-purple-50:  #f0eeff;
-  --color-purple-100: #e3dffd;
-  --color-purple-200: #c8c0fb;
-  --color-purple-300: #a89af8;
-  --color-purple-400: #8979f4;
-  --color-purple-500: #7164f0;
-  --color-purple-600: #5649d8;
-  --color-purple-700: #4138b5;
-  --color-purple-800: #312b8c;
-  --color-purple-900: #242069;
-  --color-purple-950: #16123d;
-
-  /* Grey — Subtle / Helper Text */
-  --color-grey-50:  #fafafa;
-  --color-grey-100: #f4f4f4;
-  --color-grey-200: #e8e8e8;
-  --color-grey-300: #d1d1d1;
-  --color-grey-400: #b0b0b0;
-  --color-grey-500: #9c9c9c;
-  --color-grey-600: #7a7a7a;
-  --color-grey-700: #5f5f5f;
-  --color-grey-800: #474747;
-  --color-grey-900: #313131;
-  --color-grey-950: #1c1c1c;
+  /* --- Panel elevation (design --shadow) → shadow-panel --- */
+  --shadow-panel: 0 18px 45px rgb(0 0 0 / 0.38);
 }
 
 
 /* ============================================================
-     2. LIGHT THEME
-      Semantic CSS variables — actual values live here.
-      No Tailwind utilities yet, just named CSS vars.
+   2. SEMANTIC LAYER — dark only. There is no light theme.
+
+      var() references to the palette above; no literal colours.
+      Accent themes swap only the three accent hues; the surface
+      ramp and the P&L up/down colours are never themeable.
    ============================================================ */
 :root {
-  /* Primary (violet — MediNex+ brand #7C3AED) */
-  --primary:                var(--color-violet-600);
-  --primary-hover:          var(--color-violet-700);
-  --primary-subtle:         var(--color-violet-50);
-  --primary-fg:             #ffffff;
+  color-scheme: dark;
 
-  /* Secondary (light neutral) */
-  --secondary:              var(--color-neutral-100);
-  --secondary-hover:        var(--color-neutral-200);
-  --secondary-subtle:       var(--color-neutral-50);
-  --secondary-fg:           var(--color-neutral-900);
+  /* Accent trio — default "green" theme.
+     `primary` is the brand hue (brand mark, eyebrow, pulse, nav icons, primary CTA).
+     `info` is the secondary accent (tile accent bars, focus ring, chart series).  */
+  --primary:    var(--color-brand);
+  --primary-fg: var(--color-ink-on-brand);
+  --info:       var(--color-blue);
+  --info-fg:    var(--color-ink-on-blue);
+  --tertiary:   var(--color-gold);
 
-  /* Danger */
-  --danger:                 var(--color-red-600);
-  --danger-hover:           var(--color-red-700);
-  --danger-subtle:          var(--color-red-50);
-  --danger-fg:              #ffffff;
+  /* P&L direction */
+  --up:      var(--color-profit);
+  --up-fg:   var(--color-ink-on-up);
+  --down:    var(--color-loss);
+  --down-fg: var(--color-ink-on-down);
 
-  /* Warning */
-  --warning:                var(--color-amber-500);
-  --warning-hover:          var(--color-amber-600);
-  --warning-subtle:         var(--color-amber-50);
-  --warning-fg:             var(--color-amber-900);
+  /* Feedback maps onto the P&L language so the app speaks one colour dialect */
+  --success:    var(--color-profit);
+  --success-fg: var(--color-ink-on-up);
+  --danger:     var(--color-loss);
+  --danger-fg:  var(--color-ink-on-down);
+  --warning:    var(--color-gold);
+  --warning-fg: var(--color-ink-on-gold);
 
-  /* Success */
-  --success:                var(--color-green-600);
-  --success-hover:          var(--color-green-700);
-  --success-subtle:         var(--color-green-50);
-  --success-fg:             #ffffff;
+  /* Surfaces */
+  --background:      var(--color-ink-950);
+  --surface:         var(--color-ink-800);
+  --surface-raised:  var(--color-ink-700);
+  --surface-overlay: var(--color-ink-600);
 
-  /* Info */
-  --info:                   var(--color-blue-600);
-  --info-hover:             var(--color-blue-700);
-  --info-subtle:            var(--color-blue-50);
-  --info-fg:                #ffffff;
+  /* Translucent surfaces (panel wash, tiles, wells) */
+  --surface-wash:      var(--color-wash-strong);
+  --surface-wash-soft: var(--color-wash-soft);
+  --surface-tile:      var(--color-tile);
+  --surface-well:      var(--color-well);
+  --surface-well-soft: var(--color-well-soft);
 
-  /* Surfaces (light) */
-  --background:             var(--color-neutral-50);
-  --surface:                #ffffff;
-  --surface-raised:         var(--color-neutral-100);
-  --surface-overlay:        #ffffff;
+  /* Borders */
+  --border:        var(--color-hairline);
+  --border-strong: var(--color-hairline-strong);
+  --border-soft:   var(--color-hairline-soft);
+  --border-tile:   var(--color-hairline-tile);
+  --input:         var(--color-ink-900);
+  --ring:          var(--color-blue);
+  --radius:        0.5rem; /* 8px */
 
-  /* Borders (light) */
-  --border:                 var(--color-neutral-200);
-  --border-strong:          var(--color-neutral-300);
-  --input:                  var(--color-neutral-200);
-  --ring:                   var(--color-violet-600);
-  --radius:                 0.625rem;
+  /* Text */
+  --foreground:        var(--color-slate-50);
+  --muted-foreground:  var(--color-slate-300);
+  --subtle-foreground: var(--color-slate-500);
 
-  /* Text (light) */
-  --foreground:             var(--color-neutral-900);
-  --muted-foreground:       var(--color-neutral-500);
-  --subtle-foreground:      var(--color-neutral-400);
-  --on-primary:             #ffffff;
+  /* Secondary (quiet button / chip surface) */
+  --secondary:    var(--color-wash);
+  --secondary-fg: var(--color-slate-50);
 
-  /* shadcn component aliases — point to our semantic vars above */
+  /* shadcn component aliases — point at the semantic vars above.
+     NOTE: shadcn's `--accent` means "subtle hover surface", NOT a brand hue.
+     The design's blue accent lives on `--info`; keep the two distinct. */
   --card:                       var(--surface);
   --card-foreground:            var(--foreground);
-  --popover:                    var(--surface);
+  --popover:                    var(--surface-raised);
   --popover-foreground:         var(--foreground);
   --primary-foreground:         var(--primary-fg);
   --secondary-foreground:       var(--secondary-fg);
   --muted:                      var(--surface-raised);
   --accent:                     var(--surface-raised);
   --accent-foreground:          var(--foreground);
-  --destructive:                var(--danger);
+  --destructive:                var(--down);
   --sidebar:                    var(--surface);
   --sidebar-foreground:         var(--foreground);
   --sidebar-primary:            var(--primary);
@@ -273,118 +186,73 @@
   --sidebar-accent-foreground:  var(--foreground);
   --sidebar-border:             var(--border);
   --sidebar-ring:               var(--ring);
+
+  /* Layout constant (design --sidebar) */
+  --sidebar-width: 286px;
+}
+
+/* Accent themes — set via body[data-accent]. Mirrors the design's
+   body[data-accent="…"] blocks, mapped onto our semantic names. */
+body[data-accent="violet"] {
+  --primary:  var(--color-profit);
+  --info:     var(--color-purple);
+  --tertiary: var(--color-blue-soft);
+}
+
+body[data-accent="gold"] {
+  --primary:  var(--color-teal);
+  --info:     var(--color-gold);
+  --tertiary: var(--color-blue-soft);
 }
 
 
 /* ============================================================
-   3. DARK THEME
-      Override only the semantic vars from :root above.
-      shadcn aliases update automatically via the var() chain.
-   ============================================================ */
-.dark {
-  /* Primary */
-  --primary:                var(--color-violet-400);
-  --primary-hover:          var(--color-violet-300);
-  --primary-subtle:         var(--color-violet-950);
-
-  /* Secondary */
-  --secondary:              var(--color-charcoal-black-700);
-  --secondary-hover:        var(--color-charcoal-black-600);
-  --secondary-subtle:       var(--color-charcoal-black-950);
-
-  /* Danger */
-  --danger:                 var(--color-red-400);
-  --danger-hover:           var(--color-red-300);
-  --danger-subtle:          #450a0a;
-
-  /* Warning */
-  --warning:                var(--color-amber-400);
-  --warning-hover:          var(--color-amber-300);
-  --warning-subtle:         #451a03;
-  --warning-fg:             var(--color-amber-100);
-
-  /* Success */
-  --success:                var(--color-green-400);
-  --success-hover:          var(--color-green-300);
-  --success-subtle:         #052e16;
-
-  /* Info */
-  --info:                   var(--color-blue-400);
-  --info-hover:             var(--color-blue-300);
-  --info-subtle:            #172554;
-
-  /* Surfaces */
-  --background:             var(--color-neutral-950);
-  --surface:                var(--color-neutral-900);
-  --surface-raised:         var(--color-neutral-800);
-  --surface-overlay:        var(--color-neutral-700);
-
-  /* Borders */
-  --border:                 var(--color-neutral-700);
-  --border-strong:          var(--color-neutral-600);
-  --input:                  var(--color-neutral-700);
-  --ring:                   var(--color-violet-400);
-
-  /* Text */
-  --foreground:             var(--color-neutral-50);
-  --muted-foreground:       var(--color-neutral-400);
-  --subtle-foreground:      var(--color-neutral-500);
-}
-
-
-/* ============================================================
-   4. TAILWIND UTILITIES
-      Exposes :root semantic vars as Tailwind utility classes.
-      --color-* prefix is what Tailwind reads to generate utilities.
-      text-primary, bg-background, border-border, etc.
-      No values here — only var() references to :root above.
+   3. TAILWIND UTILITIES — expose the semantic vars as utilities.
+      Only var() references here; values live in the palette.
    ============================================================ */
 @theme inline {
-  --color-primary:           var(--primary);
-  --color-primary-hover:     var(--primary-hover);
-  --color-primary-subtle:    var(--primary-subtle);
-  --color-primary-fg:        var(--primary-fg);
+  --color-primary:    var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-info:       var(--info);
+  --color-info-fg:    var(--info-fg);
+  --color-tertiary:   var(--tertiary);
 
-  --color-secondary:         var(--secondary);
-  --color-secondary-hover:   var(--secondary-hover);
-  --color-secondary-subtle:  var(--secondary-subtle);
-  --color-secondary-fg:      var(--secondary-fg);
+  --color-up:      var(--up);
+  --color-up-fg:   var(--up-fg);
+  --color-down:    var(--down);
+  --color-down-fg: var(--down-fg);
 
-  --color-danger:            var(--danger);
-  --color-danger-hover:      var(--danger-hover);
-  --color-danger-subtle:     var(--danger-subtle);
-  --color-danger-fg:         var(--danger-fg);
+  --color-success:    var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-danger:     var(--danger);
+  --color-danger-fg:  var(--danger-fg);
+  --color-warning:    var(--warning);
+  --color-warning-fg: var(--warning-fg);
 
-  --color-warning:           var(--warning);
-  --color-warning-hover:     var(--warning-hover);
-  --color-warning-subtle:    var(--warning-subtle);
-  --color-warning-fg:        var(--warning-fg);
+  --color-secondary:    var(--secondary);
+  --color-secondary-fg: var(--secondary-fg);
 
-  --color-success:           var(--success);
-  --color-success-hover:     var(--success-hover);
-  --color-success-subtle:    var(--success-subtle);
-  --color-success-fg:        var(--success-fg);
+  --color-background:      var(--background);
+  --color-surface:         var(--surface);
+  --color-surface-raised:  var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
 
-  --color-info:              var(--info);
-  --color-info-hover:        var(--info-hover);
-  --color-info-subtle:       var(--info-subtle);
-  --color-info-fg:           var(--info-fg);
+  --color-surface-wash:      var(--surface-wash);
+  --color-surface-wash-soft: var(--surface-wash-soft);
+  --color-surface-tile:      var(--surface-tile);
+  --color-surface-well:      var(--surface-well);
+  --color-surface-well-soft: var(--surface-well-soft);
 
-  --color-background:        var(--background);
-  --color-surface:           var(--surface);
-  --color-surface-raised:    var(--surface-raised);
-  --color-surface-overlay:   var(--surface-overlay);
-
-  --color-border:            var(--border);
-  --color-border-strong:     var(--border-strong);
+  --color-border:        var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-soft:   var(--border-soft);
+  --color-border-tile:   var(--border-tile);
 
   --color-foreground:        var(--foreground);
   --color-muted-foreground:  var(--muted-foreground);
   --color-subtle-foreground: var(--subtle-foreground);
-  --color-on-primary:        var(--on-primary);
 
-  /* shadcn component color utilities — required so bg-popover, bg-muted,
-     text-popover-foreground etc. generate correctly from :root aliases */
+  /* shadcn component color utilities */
   --color-card:                       var(--card);
   --color-card-foreground:            var(--card-foreground);
   --color-popover:                    var(--popover);

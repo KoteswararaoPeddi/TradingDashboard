@@ -17,11 +17,11 @@ note. Feature composites are logged here as they are built.
 
 ---
 
-> **Status:** the **dashboard composites below are the target patterns from the design**
-> (`context/designs/website.index.html`) and are logged as "built" only once their code lands. The
-> theme is **dark** with the green-up / red-down P&L language; components are written against the
-> semantic tokens (`bg-surface`, `text-foreground`, `text-up`/`text-down`, `border-border`), which
-> resolve correctly once the tokens are repointed in `theme.css`.
+> **Status:** the dark theme tokens are live in `theme.css`, and the **shell** and **overview**
+> composites are built and imprinted. Sections still marked **target** are patterns read from the
+> design (`context/designs/website.index.html`) whose code has not landed yet. Every component is
+> written against the semantic tokens (`bg-surface`, `text-foreground`, `text-up`/`text-down`,
+> `border-border`) — never a raw Tailwind colour class and never a hex.
 
 ---
 
@@ -52,7 +52,7 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 | Select | `ui/select.tsx` | **shadcn** (base-ui). Filter selects (asset/direction/result/sort). Controlled via `value`/`onValueChange`; with RHF use a `Controller`. Dark popover surface. |
 | Field | `ui/field.tsx` | Wrapper: `Label` + control + `error` (`text-body-sm text-down`); `flex flex-col gap-1.5`; optional muted `hint`. Use for every form field. |
 | Label | `ui/label.tsx` | `<label>`, `text-body-sm font-medium text-foreground select-none`. |
-| Typography | `ui/typography/` | Polymorphic text component. **All content text goes through it** (variant + weight props); color/layout via `className`. Numeric displays use the heavy weights. |
+| Typography | `ui/typography/` | Polymorphic text component. **All content text goes through it** (variant + weight props); color/layout via `className`. Weights: normal → extrabold, plus **`black` (900)** added for the cockpit's numerics (balances, stat values, the page title), which the design sets at 900. Variants emit `font-heading`/`font-body`; both are aliases of Inter in `theme.css` (without those tokens the classes would resolve to nothing). |
 | Dialog | `ui/dialog.tsx` | **shadcn** (base-ui). Add-trade / edit-trade / confirm dialogs. Controlled via `open`/`onOpenChange`; built-in ✕ (`showCloseButton={false}` to hide). |
 | Table | `ui/table.tsx` | **shadcn**, CLI-installed when the trades table lands. Sticky `th`, hover rows, `overflow-x-auto` wrapper (the table `min-width` forces horizontal scroll on mobile). |
 | DropdownMenu | `ui/dropdown-menu.tsx` | **shadcn** (base-ui). Row actions / overflow menus. (The user menu it also served is gone — no auth.) |
@@ -61,31 +61,176 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 
 ---
 
-## Dashboard composites (target — from `designs/website.index.html`)
+## Dashboard composites
 
-The trading cockpit's custom composites (no shadcn equivalent). Build each on `Card` + tokens; log as
-**built** with its file path once the code lands. All live under `features/dashboard/components/*`
-(the metrics come from `features/dashboard/lib/metrics.ts`).
+The trading cockpit's custom composites (no shadcn equivalent). All live under
+`features/dashboard/components/*`; the numbers come from `features/dashboard/lib/metrics.ts`.
+Rows marked **target** are patterns from `designs/website.index.html` that are not built yet.
 
-| Composite | Pattern (design classes → tokens) |
-| --------- | --------------------------------- |
-| **AppShell / Sidebar** | `src/shared/components/AppShell.tsx` — `app-shell` grid `[286px_minmax(0,1fr)]`; sidebar sticky, `bg-surface/88 backdrop-blur border-r border-border`, `flex-col gap`. Below 1180px → horizontal nav strip, account card hidden. **No session guard and no user menu** (the app has no auth); the `(app)` layout renders it unguarded. |
-| **Sidebar brand** | brand row: `TJ` mark (`size-11 rounded-lg` green→blue gradient, `text-primary-fg font-black`) + title `text-h4 font-extrabold` over muted uppercase account label. |
-| **Sidebar nav** | numbered links (`nav-icon` `size-6 rounded bg-surface-raised text-primary` + label `text-body-sm font-bold`); active = `bg-surface-raised text-foreground border border-border`. Anchors to section ids. |
-| **AccountCard** | pinned card (`mt-auto`, gradient surface, `shadow-panel`): big balance (`text-display-lg font-black`, signed color) + 2×2 minis (Net P&L / Growth / Win Rate / Trades) on `bg-black/22` wells. |
-| **Topbar** | eyebrow (`text-info` uppercase + pulse dot) + `h1` (clamp 32–56, `font-black`) + muted subline; top actions: accent **theme dots**, Copy Summary (outline), Export CSV (primary gradient). |
-| **Panel** | the core container: header (`panel-header`: `text-h3`/`h4` title + muted `text-body-sm` sub, optional header action) + `panel-body` (18px pad). `bg-surface` gradient + `border-border` + `rounded-lg` + `shadow-panel`. |
-| **AccountStrip** | 4-cell strip (`grid-cols-4`, divided by `border-border`, on `bg-black/18`): `strip-label` (uppercase muted) + `strip-value` (clamp 22–34 `font-black`, signed color) + `strip-note`. |
-| **MarketTile / StatCard** | tile on `bg-surface-raised` + hairline border, 3px left accent bar; uppercase label + big value (signed/family color) + meta line. StatCard hover lifts (`-translate-y-0.5`). Stats grid `auto-fit minmax(180px,1fr)`. |
+### Built — the shell *(imprinted 2026-07-16)*
+
+| Composite | File |
+| --------- | ---- |
+| DashboardShell | `components/shell/DashboardShell.tsx` |
+| BrandBlock | `components/shell/BrandBlock.tsx` |
+| SectionNav | `components/shell/SectionNav.tsx` |
+| AccountCard | `components/shell/AccountCard.tsx` |
+| AccentSwitcher | `components/shell/AccentSwitcher.tsx` |
+| Topbar | `components/shell/Topbar.tsx` |
+| Panel | `components/Panel.tsx` |
+
+| Property | Class |
+| -------- | ----- |
+| Shell grid | `grid min-h-screen grid-cols-1 min-[1181px]:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]` |
+| Sidebar | `bg-surface/88 backdrop-blur-lg px-4.5 py-5.5 border-b border-border` → `min-[1181px]:sticky min-[1181px]:top-0 min-[1181px]:h-screen min-[1181px]:border-r min-[1181px]:border-b-0` |
+| Main | `min-w-0 p-4 md:p-6.5` |
+| Panel container | `overflow-hidden rounded-lg border border-border bg-linear-to-b from-surface-wash to-surface-wash-soft shadow-panel scroll-mt-6` |
+| Panel header | `flex items-start justify-between gap-3.5 p-4.5 pb-0`; title `Typography variant="h3" weight="black"`; sub `variant="body-sm" text-muted-foreground mt-1.5` |
+| Panel body | `p-4.5` (`padded={false}` when the child owns its padding) |
+| Raised well | `rounded-lg border border-border-soft bg-surface-well p-2.5` |
+| Empty state | `rounded-lg border border-dashed border-border bg-surface-wash-soft p-9 text-center` |
+| Card surface | `bg-linear-to-b from-surface-wash to-surface-wash-soft` + `border border-border` + `shadow-panel` |
+| Nav item | `flex min-h-10.5 items-center gap-2.5 rounded-lg border border-transparent px-3 text-body-sm font-bold` |
+| Nav item (active) | `border-border bg-surface-wash text-foreground` |
+| Nav item (idle) | `text-muted-foreground hover:border-border hover:bg-surface-wash hover:text-foreground` |
+| Nav marker | `grid size-5.5 place-items-center rounded-md bg-surface-wash text-label-sm font-black text-primary` |
+| Brand mark | `grid size-10.5 place-items-center rounded-lg bg-linear-to-br from-primary to-info text-primary-fg` + brand-tinted glow via `color-mix` |
+| Micro-label | `Typography variant="label-sm\|label-base" weight="extrabold" className="text-muted-foreground uppercase"` |
+| Big numeric | `Typography variant="h1\|display-*" weight="black"` + signed colour |
+| Signed value | `text-up` when `>= 0`, `text-down` when `< 0` — never any other colour |
+| Hairline | `border-border`; inner wells `border-border-soft`; tiles `border-border-tile` |
+| Shadow | `shadow-panel` (panels, account card) |
+
+**Pattern notes:**
+
+- **`Panel` is the only section container.** Every cockpit section renders through it, so the header
+  rhythm and surface are defined once. It takes `id` (the sidebar's anchor target) and `scroll-mt-6`
+  keeps an anchored section clear of the top edge. Pass `padded={false}` for tables/charts/strips
+  that supply their own padding.
+- **The sidebar reads the full trade set, the panels read the filtered set.** `AccountCard` is fed
+  metrics over *all* trades on purpose: the account's standing must not move when a filter narrows
+  the panels beside it.
+- **Signed colour is mechanical**, never decorative: `>= 0 → text-up`, `< 0 → text-down`. Win Rate and
+  Trades take no tone because they are unsigned.
+- **`SectionNav` uses `IntersectionObserver`, not a scroll handler** — it only fires on boundary
+  crossings instead of running work every scroll frame. When several sections are visible the topmost
+  wins, so the highlight tracks reading position rather than flickering.
+- **`AccentSwitcher` reads `localStorage` in an effect, never during render.** The server renders
+  `DEFAULT_ACCENT`; reading storage while rendering would desync hydration. It only writes
+  `document.body.dataset.accent` — no component knows which hue is active.
+- **Never use a raw Tailwind colour class** (`bg-white/6`, `bg-black/22`, `border-white/8`). Every
+  translucent surface has a token: `surface-wash` / `surface-wash-soft` (panel wash, nav hover),
+  `surface-tile` (market/stat tiles), `surface-well` / `surface-well-soft` (minis, account strip),
+  `border-soft` / `border-tile`. Panels use `bg-linear-to-b from-surface-wash to-surface-wash-soft`
+  (Tailwind v4 syntax), matching the design's `rgba(255,255,255,.058) → .025` wash.
+- Design fidelity: sidebar padding is 22px/18px (`py-5.5 px-4.5`), the account balance is 30px
+  (`variant="h1"`, **not** `display-lg` which runs 34px), nav items are 42px (`min-h-10.5`), and the
+  brand mark is 42px (`size-10.5`).
+- **Not built yet in the topbar:** Copy Summary + Export CSV. They depend on the filtered set and land
+  with the export slice.
+
+### Built — Tile, the shared figure card *(imprinted 2026-07-16)*
+
+File: `components/Tile.tsx` — used by the market board **and** the stats grid.
+
+| Property | Class |
+| -------- | ----- |
+| Container | `relative min-h-30 overflow-hidden rounded-lg border border-border-tile bg-surface-tile p-4` |
+| Accent bar | `before:absolute before:top-0 before:left-0 before:h-full before:w-0.75 before:bg-info before:content-['']` |
+| Interactive | `transition-all hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-raised/92` |
+| Label | `Typography variant="label-base" weight="extrabold"` + `block text-muted-foreground uppercase` |
+| Value | `variant="h2" weight="black"` + `mt-2.5 block leading-none wrap-anywhere` + tone |
+| Note | `variant="body-sm"` + `mt-2.5 text-muted-foreground` |
+
+**Tone map** (`Tone` is exported from `Tile.tsx` — the one source for figure colour):
+
+| Tone | Class | Meaning |
+| ---- | ----- | ------- |
+| `up` | `text-up` | profit / good |
+| `down` | `text-down` | loss / bad |
+| `info` | `text-info` | a ratio — no direction to colour |
+| `warning` | `text-warning` | below par but not a loss (win rate < 50%) |
+| `neutral` | `text-purple` | reference count, neither good nor bad |
+
+**Pattern notes:**
+
+- **Build every figure card on `Tile`.** The design shares one base between `.market-tile` and
+  `.stat-card`; duplicating it would let the two drift. `interactive` adds the hover lift (stats grid
+  uses it, the market board does not).
+- **`wrap-anywhere` on the value** so a long money string breaks instead of widening its grid track.
+- **`neutral` reads the palette's `text-purple` directly.** Fixed, non-themeable hues (`purple`,
+  `short`, `flat`) have no role the accent themes could change, so they skip the semantic layer.
+  Anything with a *role* (surfaces, borders, accents, P&L) must still go palette → semantic → utility.
+
+### Built — the overview *(imprinted 2026-07-16)*
+
+| Composite | File |
+| --------- | ---- |
+| Overview | `components/overview/Overview.tsx` |
+| AccountStrip | `components/overview/AccountStrip.tsx` |
+| MarketBoard | `components/overview/MarketBoard.tsx` (renders `Tile`) |
+
+| Property | Class |
+| -------- | ----- |
+| Strip container | `grid grid-cols-1 border-y border-border bg-surface-well-soft min-[781px]:grid-cols-4` |
+| Strip cell | `@container min-h-28 border-b border-border p-4.5 last:border-b-0 min-[781px]:border-r min-[781px]:border-b-0 min-[781px]:last:border-r-0` |
+| Strip label | `Typography variant="label-base" weight="extrabold"` + `text-muted-foreground uppercase` |
+| Strip value | `variant="display-lg" weight="black"` + `text-[clamp(1.375rem,19cqi,2.125rem)] leading-none whitespace-nowrap` + tone |
+| Strip note | `variant="body-sm" text-muted-foreground mt-2.5` |
+| Market board | `grid h-full grid-cols-1 gap-3 sm:grid-cols-2` |
+| Market tile | `relative min-h-30 overflow-hidden rounded-lg border border-border-tile bg-surface-tile p-4` |
+| Tile accent bar | `before:absolute before:top-0 before:left-0 before:h-full before:w-[3px] before:bg-info before:content-['']` |
+| Tile value | `variant="h2" weight="black" mt-2.5 leading-none` + tone |
+
+**Pattern notes:**
+
+- **Tone rules beyond plain sign.** Max Drawdown is **always `text-down`** (a drawdown is a loss
+  figure even when small); Profit Factor is **`text-info`** (a ratio has no direction to colour); Win
+  Rate is **`text-warning`** below 50% rather than red (a coin flip is not a loss). Everything else
+  follows `>= 0 → up`, `< 0 → down`.
+- **The tile's 3px left bar uses `bg-info`, not the P&L colour** — it is the design's tile signature
+  and follows the accent theme.
+- **Strip values size with `cqi`, not `vw`.** The design uses `clamp(22px, 3vw, 34px)`, but `3vw`
+  tracks the viewport while the value sits in a cell an eighth as wide: at 1440 its own `$1,166.40`
+  renders 169px inside a 133px cell and collides with the neighbour. Each cell is a `@container` and
+  the value clamps on `19cqi`, so it still reaches the design's 34px cap on wide screens (verified:
+  25px @1440, 34px @1920, zero overflow at both).
+- **The strip stays 4-across down to 780px**, even though the overview itself stacks at 1180px.
+  Avoid mixing named breakpoints with arbitrary `min-[]` ones on the same property — Tailwind's sort
+  order between them is not intuitive, and `md:grid-cols-2` silently beat `min-[1181px]:grid-cols-4`.
+- Panel gets the two-column layout via its **`aside`** prop (header + strip left, market board right);
+  `children` render unpadded in that mode because the strip is full-bleed.
+
+### Built — the stats grid *(imprinted 2026-07-16)*
+
+Files: `components/stats/Stats.tsx` · rows from `lib/stat-rows.ts`
+
+| Property | Class |
+| -------- | ----- |
+| Grid | `grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3` |
+| Card | `Tile` with `interactive` |
+| Loading | 12 × `Skeleton h-30 rounded-lg border border-border` in the same grid |
+
+**Pattern notes:**
+
+- **27 rows live in `lib/stat-rows.ts`, not the component.** It is pure presentation — every number is
+  read off the metric bundle, so the panel cannot compute (or disagree) on its own.
+- **`statTone()` ports the design's `colorClass`, and order matters:** the *family* check runs before
+  the *sign* check, so "Max Drawdown" stays red at +17.99% and "Max Loss Streak 5" is red while
+  "Max Win Streak 5" is purple. Families: `NEGATIVE_LABELS` → down · `RATIO_LABELS` → info ·
+  `NEUTRAL_LABELS` → neutral · else up. A value containing `-` is down.
+- **`auto-fit` sizes the grid, not breakpoints** — it reflows on its own (5 columns at 1440).
+
+### Target — not built yet
 | **InsightCard / AssetCard** | label + big value + note; AssetCard adds a **proportional bar** (`asset-bar` track + fill width `--w:${pct}%` and `--bar` = up/down color via inline `style`). |
 | **SideBadge** | LONG → `up`/green, SHORT → blue (`#9dbbff` token), LIQUIDATION → `down`/red. `rounded-full` pill, `text-caption font-black uppercase`. |
 | **ResultBadge** | Profit → green (`bg-up`), Loss → red (`bg-down`), Breakeven → neutral grey. Same pill shape. |
 | **CalendarHeatmap** | 7-col weekday grid; leading empty cells for the first weekday; each day tinted by P&L intensity (`profit`/`loss` bg + border alpha scaled by `--strength`); date + compact P&L (signed color). `overflow-x-auto`, `min-w-[780px]`. |
 | **TradesTable** | shadcn `Table` in an `overflow-x-auto` wrapper (`min-w-[880px]`): sticky `th` (uppercase muted), hover rows, `SideBadge`/`ResultBadge` cells, signed P&L + running-balance coloring, **Load More** (24-row step) + live count. |
 | **FilterBar** | `filters` grid (search + 4 selects + from/to date + min/max P&L + sort) + preset **chips** row. `"use client"`; changing any control recomputes the dashboard and clears active chips; Reset restores defaults. |
-| **Chart wrappers** | seven `react-chartjs-2` charts (see below), each dynamically imported (`ssr:false`) inside a Panel `chart-body` (fixed height). |
+| **Chart wrappers** | seven recharts charts (see below), each `"use client"` + dynamically imported (`ssr:false`) inside a Panel `chart-body`. The fixed height is required: `ResponsiveContainer` collapses to zero inside an auto-height box. |
 
-### Chart set (Chart.js / `react-chartjs-2`)
+### Chart set (recharts)
 
 | Chart | Type | Data (from metrics) | Color rule |
 | ----- | ---- | ------------------- | ---------- |

@@ -23,6 +23,9 @@ export const TYPOGRAPHY_WEIGHTS = [
   'semibold',
   'bold',
   'extrabold',
+  // The cockpit's numerics (balances, stat values, the page title) are set at 900
+  // in the design; without this they would top out at 800 and read too light.
+  'black',
 ] as const
 
 export type TypographyVariant = typeof TYPOGRAPHY_VARIANTS[number]

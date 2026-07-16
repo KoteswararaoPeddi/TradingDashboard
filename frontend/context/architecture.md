@@ -5,7 +5,7 @@ the UI and talks **only** to our own REST API; the backend owns validation and p
 **no authentication** anywhere in the system.
 
 ```
-frontend/   → Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui + Chart.js
+frontend/   → Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui + recharts
 backend/    → NestJS + Prisma + PostgreSQL  (open REST API under /api, no auth)
 ```
 
@@ -25,7 +25,7 @@ trade data — there is **no AI, no ML, and no third-party market data** in the 
 | Language     | TypeScript (strict)                    | Throughout                                                    |
 | Styling      | Tailwind CSS v4 + tw-animate-css       | Utility styling and animation (no hand-written CSS files)     |
 | Components   | shadcn/ui (Radix + Base UI)            | Accessible UI primitives in `src/shared/components/ui`        |
-| Charts       | **Chart.js** (`react-chartjs-2`)       | Equity curve, P&L bars, doughnut — matches the design         |
+| Charts       | **recharts**                           | Equity curve, P&L bars, donut. SVG, so charts read colour tokens directly |
 | Icons        | lucide-react                           | Icon set                                                      |
 | Fonts        | `next/font/google` — Inter             | Inter base (`--font-inter`); no display/serif font           |
 | HTTP         | axios (shared instance)                | All API calls; a minimal 403/5xx logger in the interceptor    |
@@ -195,11 +195,11 @@ the shared axios instance from `@lib/axios.config`.
 ## Rendering & Data Flow
 
 - **Server Components by default.** A component becomes a Client Component (`"use client"`) only when
-  it needs interactivity — forms, filters, anything reading a Zustand store, and **every Chart.js
+  it needs interactivity — forms, filters, anything reading a Zustand store, and **every recharts
   chart** (canvas + charts are client-only). Push the boundary as low as possible: the dashboard page
   is a Server shell composing panels; the interactive filter bar, the charts, the table controls, and
   the accent switcher are the client leaves.
-- **Chart.js charts are dynamically imported** (`next/dynamic`, `ssr: false`) — the library is heavy
+- **Charts are dynamically imported** (`next/dynamic`, `ssr: false`) — recharts is heavy
   and canvas needs the browser. Keep them out of first paint.
 - **All reads/writes go through the shared axios instance** (`@lib/axios.config`) to feature
   **services** (`features/*/api/*.service.ts`). The instance is now plain — `baseURL` plus a minimal
@@ -221,7 +221,7 @@ the shared axios instance from `@lib/axios.config`.
 - All cross-cutting frontend HTTP goes through the shared axios instance and feature services — never
   a bare `fetch`/`axios()` in a component.
 - **UI is built with Tailwind utilities + tokens + shadcn primitives** — no hand-written CSS files, no
-  hand-rolled components shadcn provides (panel/tile/badge composites and Chart.js charts are the
+  hand-rolled components shadcn provides (panel/tile/badge composites and recharts charts are the
   legitimate custom builds; gradients/bar-widths via inline `style` with `var(--color-*)` are allowed).
 - **Metrics come from one pure module** (`lib/metrics.ts`); every panel is a pure function of the
   metric bundle so the whole dashboard stays consistent with the active filter.

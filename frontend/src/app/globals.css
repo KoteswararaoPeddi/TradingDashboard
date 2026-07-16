@@ -3,16 +3,53 @@
 @import "shadcn/tailwind.css";
 @import "../shared/styles/theme.css";
 
+/* The app is dark-only: `:root` already holds the dark values, so there is no
+   theme to toggle. `<html class="dark">` exists purely so the shadcn primitives'
+   built-in `dark:` utilities (dark:bg-input/30, dark:hover:bg-input/50, …) match
+   and render their dark styling. Without it they would fall back to their light
+   styling on a dark background. */
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply overflow-x-hidden bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
+  }
+
+  /* The app background: a faint 42px grid over a dark diagonal wash.
+     One global rule (per the design's body), never repeated per component. */
+  body {
+    @apply overflow-x-hidden bg-background text-foreground;
+    min-height: 100vh;
+    background-image:
+      linear-gradient(var(--color-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px),
+      linear-gradient(
+        135deg,
+        var(--color-ink-950) 0%,
+        var(--color-ink-940) 42%,
+        var(--color-ink-975) 100%
+      );
+    background-size:
+      42px 42px,
+      42px 42px,
+      auto;
+  }
+
+  /* Dark scrollbars, so the chrome matches the cockpit rather than the OS. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-ink-930);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-500);
+    border: 2px solid var(--color-ink-930);
+    border-radius: 999px;
   }
 }

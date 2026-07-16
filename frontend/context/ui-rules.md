@@ -21,7 +21,7 @@ primitives, one set of conventions, one dark theme with the green-up / red-down 
   `variant`/`weight` props — not raw `text-*` size classes in feature/page code. Color and layout
   stay on `className`. Numeric displays use the heavy weights (see ui-tokens.md); never arbitrary
   `text-[Npx]`. (Interactive controls — buttons, nav links, chips — keep their utility classes.)
-- **Charts use Chart.js** (`react-chartjs-2`), dynamically imported, `ssr: false`. Chart colors come
+- **Charts use recharts**, `"use client"` + dynamically imported, `ssr: false`. Chart colors come
   from the token values (green-up / red-down for signed data; brand/blue for series) — read them from
   CSS vars, never hardcode a second copy of the palette.
 - Use `cn` from `@lib/utils` for conditional/merged classes — never hand-concatenate class strings.

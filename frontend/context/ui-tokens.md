@@ -82,18 +82,31 @@ with these two tokens. Never invent a third "gain" color. White surfaces/text us
 
 ## Accent Themes (switchable)
 
-The design ships **three runtime accent themes** toggled by a `data-accent` attribute on `<body>`
-(default **green**, plus **violet** and **gold**). Each remaps `--primary` / `--info` / the tertiary
-accent; the surface ramp and the P&L up/down colors **do not change**.
+Three runtime accent themes, toggled by a `data-accent` attribute on `<body>` (default **green**,
+plus **violet** and **gold**). Each swaps **only the accent trio**; the surface ramp and the P&L
+up/down colors **never change**.
 
-| `data-accent` | `--primary` (brand) | Notes                                  |
-| ------------- | ------------------- | -------------------------------------- |
-| `green` (default) | `#16d18d`       | Teal-green brand + blue secondary      |
-| `violet`      | `#b28cff`           | Violet brand + green/blue secondaries  |
-| `gold`        | `#f4b15e`           | Gold brand + teal/blue secondaries     |
+The trio maps to the design's `--accent-2` / `--accent` / `--accent-3`:
+
+- **`--primary`** — the brand hue: brand mark + gradient start, eyebrow, pulse dot, nav icons,
+  primary CTA.
+- **`--info`** — the secondary accent: tile left accent bars, focus ring, chart series.
+- **`--tertiary`** — the third accent.
+
+| `data-accent`     | `--primary` (brand) | `--info` (secondary) | `--tertiary` |
+| ----------------- | ------------------- | -------------------- | ------------ |
+| `green` (default) | `#16d18d` brand     | `#4f8cff` blue       | `#f4b15e` gold |
+| `violet`          | `#37d98b` up-green  | `#b28cff` purple     | `#6ea8ff` blue-soft |
+| `gold`            | `#31d0aa` teal      | `#f4b15e` gold       | `#6ea8ff` blue-soft |
+
+> **Careful — the theme's *name* is not always its `--primary`.** The topbar dots render green
+> `#16d18d`, violet `#b28cff`, gold `#f4b15e`. For **green** that is `--primary`, but for **violet**
+> and **gold** it is `--info`. The design is internally inconsistent here; we reproduce it verbatim.
+> So switching to violet turns the accent **bars and focus ring** violet while the eyebrow and pulse
+> stay green. That is intended, not a bug.
 
 Wire the switcher via the theme dots in the topbar; it sets `document.body.dataset.accent`. Because
-components use the **semantic** `primary`/`info` tokens (not the raw hues), they restyle for free.
+components use the **semantic** `primary`/`info` tokens (never the raw hues), they restyle for free.
 
 ---
 

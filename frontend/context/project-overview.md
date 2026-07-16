@@ -12,7 +12,7 @@ experience is a single dark-themed, real-time "live performance cockpit" for one
 The app is split into two deployables:
 
 ```
-frontend/   → Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui + Chart.js
+frontend/   → Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui + recharts
 backend/    → NestJS + Prisma + PostgreSQL  (open REST API, no auth, single-user)
 ```
 
@@ -25,7 +25,7 @@ validation and persistence. Secrets live only on the backend.
 
 > **Design source of truth:** `frontend/context/designs/website.index.html` is the reference build
 > for the dashboard — the dark theme, the sidebar + topbar shell, the overview strip, the filters,
-> the 27 stat cards, the seven Chart.js charts, the insights/leaderboard, the calendar heatmap, and
+> the 27 stat cards, the seven charts, the insights/leaderboard, the calendar heatmap, and
 > the trades table. The context docs describe how to reproduce that design in the Next.js stack.
 
 ---
@@ -78,7 +78,7 @@ Export the filtered set to CSV · Copy a text summary · Switch accent theme
 5. **Core performance stats** — ~27 metrics (total/winning/losing trades, win rate, gross/net P&L,
    profit factor, best/worst trade, average win/loss, risk/reward, long/short profit & counts,
    liquidation loss, max drawdown, win/loss streaks, balances, growth, average trade).
-6. **Charts (Chart.js)** — equity curve (line + gradient), daily P&L (bar), weekday performance,
+6. **Charts (recharts)** — equity curve (line + gradient), daily P&L (bar), weekday performance,
    hourly performance, asset performance (horizontal bar), long-vs-short, win/loss distribution
    (doughnut).
 7. **Risk & edge insights + asset leaderboard** — best/worst asset, best/worst hour, best weekday,

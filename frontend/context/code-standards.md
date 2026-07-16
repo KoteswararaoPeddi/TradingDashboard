@@ -41,7 +41,7 @@ every session — they prevent pattern drift. See architecture.md for structure.
   before using a Next.js-specific feature; heed deprecation notices (see `AGENTS.md`).
 - **Server Components by default.** Add `"use client"` only when a component needs
   `useState`/`useEffect`, browser APIs/event listeners, a Zustand store, or a client-only
-  library. The filter bar, the trades-table controls, the accent switcher, and **every Chart.js
+  library. The filter bar, the trades-table controls, the accent switcher, and **every recharts
   chart** are client boundaries. Push the boundary as low in the tree as possible.
 - Never add `"use client"` to a layout unless required.
 - Pages/layouts in `src/app` stay thin — they compose feature components and hold no business
@@ -124,7 +124,7 @@ before using a version-specific API (per AGENTS.md).
 - **Fetch data on the server** when appropriate; **don't fetch the same data repeatedly** — fetch the
   trade set once and derive all panels from it.
 - **`next/image`, `next/font`, `next/script`** — built-in asset optimizations.
-- **Dynamic-import heavy UI** — `next/dynamic` (`ssr: false`) for the **Chart.js charts** and any
+- **Dynamic-import heavy UI** — `next/dynamic` (`ssr: false`) for the **recharts charts** and any
   heavy widget; load heavy libs on demand with `import()`. Keep them out of first paint.
 - **Avoid unnecessary/large dependencies** — can native JS / Next / shadcn already do it? Prefer
   narrow imports (`import { TrendingUp } from "lucide-react"`), never `import *` / barrels.
@@ -289,7 +289,7 @@ Every domain folder has the same shape: `*.module.ts`, `*.controller.ts`, `*.ser
   It lands in `src/shared/components/ui/` in the project's style (`components.json`). **Do not
   re-implement a component shadcn already provides.**
 - **Only build by hand** when shadcn has no equivalent: the dashboard composites (`Panel`, `StatCard`,
-  `MarketTile`, `SideBadge`, `ResultBadge`, `CalendarHeatmap`, the Chart.js wrappers) or genuinely
+  `MarketTile`, `SideBadge`, `ResultBadge`, `CalendarHeatmap`, the recharts wrappers) or genuinely
   custom widgets. Compose those from the installed shadcn primitives + tokens.
 - **All text goes through `Typography`** (`@components/ui/typography`) using its `variant`/`weight`
   props — not raw `text-*` size classes in feature/page code. Color and layout stay on `className`.
@@ -416,7 +416,7 @@ Available: `@/*`, `@app/*`, `@features/*`, `@shared/*`, `@components/*`, `@lib/*
 ## Dependencies
 
 Don't install a package without a clear reason. First check: does shadcn/ui already provide the
-component? does Next.js/React/Nest already provide it? The charting dependency is **Chart.js +
-react-chartjs-2** (matches the design); CSV import/export can use a small parser or native code — 
+component? does Next.js/React/Nest already provide it? The charting dependency is **recharts**
+(already installed); CSV import/export can use a small parser or native code — 
 prefer native before adding a library. The stack is documented in architecture.md and each app's
 `package.json` — update the Stack table when adding a dependency.
