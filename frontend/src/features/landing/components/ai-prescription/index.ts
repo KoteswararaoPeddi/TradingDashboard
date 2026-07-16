@@ -1,0 +1,1 @@
+export { AiPrescription } from "./AiPrescription"

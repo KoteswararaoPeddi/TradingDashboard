@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "skillOverrides": {
+    "remember": "off"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "AGENTS.md: checking for implement/fix intent",
+            "command": "grep -qiE 'implement|feature|build|creat|scaffold|fix|bug|broken|error|issue|regress|crash|fail|change|updat|modif|refactor|revamp|redesign|adjust|correct|resolv|patch|rework|wire|add |new (page|component|section|route|endpoint)' && echo 'REMINDER: Per frontend/AGENTS.md, before writing ANY code for this implementation or fix, READ THE CONTEXT STACK IN ORDER: context/project-overview.md -> architecture.md -> ui-tokens.md -> ui-rules.md -> ui-registry.md -> code-standards.md -> library-docs.md -> build-plan.md -> progress-tracker.md. Rules that never change: no hardcoded hex or raw Tailwind color classes; load a library skill before using that library; run /architect before a complex feature and confirm a plan; after every change update progress-tracker.md, build-plan.md and ui-registry.md; if the same problem persists after one corrective prompt, stop and run /recover.' || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "AGENTS.md guardrail check",
+            "command": "f=$(grep -oE '\"file_path\":\"[^\"]*\"' | head -1); printf '%s' \"$f\" | grep -qiE 'frontend.*src.*[.](tsx?|css)\"' && printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"AGENTS.md CHECK before this edit: confirm you have read context/*.md in order (project-overview, architecture, ui-tokens, ui-rules, ui-registry, code-standards, library-docs, build-plan, progress-tracker). No hardcoded hex or raw Tailwind color classes. After this change, update progress-tracker.md, build-plan.md and ui-registry.md.\"}}' || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Checking for UI component edits",
+            "command": "f=$(grep -oE '\"file_path\":\"[^\"]*\"' | head -1); printf '%s' \"$f\" | grep -qiE 'components/|[.]tsx\"' && printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"REMINDER: you edited a UI component. Run /imprint to capture its patterns into ui-registry.md before finishing (first run on this project: /imprint audit).\"}}' || true"
+          }
+        ]
+      }
+    ]
+  }
+}
