@@ -143,6 +143,28 @@ app.enableCors({ origin: process.env.CORS_ORIGIN })
 app.setGlobalPrefix("api")
 ```
 
+## `@nestjs/swagger` (OpenAPI docs)
+
+Interactive API docs at **`/api/docs`** (spec JSON at **`/api/docs-json`**), wired in `main.ts` via
+`DocumentBuilder` + `SwaggerModule.setup(...)`. It is the primary way to exercise endpoints by hand —
+there is no Postman collection.
+
+**Rules:**
+
+- **Document every endpoint as you build it**, not afterwards: `@ApiTags("<domain>")` on the
+  controller, `@ApiOperation({ summary })` per handler, and an `@ApiOkResponse`/`@ApiCreatedResponse`
+  whose `schema.example` shows the **wrapped** envelope (`{ success, message, data }`) — the response
+  interceptor wraps the return value, so a bare DTO example would misrepresent the real payload.
+- **Annotate DTO fields with `@ApiProperty`** (`@ApiPropertyOptional` for optional ones) alongside the
+  `class-validator` decorators. The DTO is the single source of truth for the request contract, and
+  Swagger reads it.
+- **The docs path is exempt from helmet's CSP** (see the helmet section) — keep the exemption scoped
+  to `/api/docs`; don't relax CSP globally to make the UI work.
+- The setup path is **literal** and independent of `setGlobalPrefix("api")` — `SwaggerModule.setup(
+  "api/docs", ...)` is what puts it under `/api/docs`. Changing the global prefix won't move it.
+- Because the API is unauthenticated, the docs page is open too — another reason the backend stays
+  local (see architecture.md → Single-user, no auth).
+
 ## Prisma
 
 - Single injectable `PrismaService extends PrismaClient` (connects `onModuleInit`). Inject it into
@@ -201,7 +223,21 @@ runs it.
 
 ## helmet + `@nestjs/throttler` (security)
 
-- `app.use(helmet())` in `main.ts` for security headers.
+- helmet supplies the security headers in `main.ts`. It is applied to **every path except
+  `/api/docs`**: Swagger UI boots from inline scripts, which helmet's default CSP (`script-src
+  'self'`) blocks, leaving a blank page. The API otherwise serves only JSON, so the docs route is the
+  sole HTML surface — exempt just that path rather than weakening CSP globally.
+
+  ```typescript
+  const helmetMiddleware = helmet()
+  app.use((req, res, next) =>
+    req.path.startsWith("/api/docs") ? next() : helmetMiddleware(req, res, next),
+  )
+  ```
+
+  Verify with `curl -D - -o /dev/null http://localhost:3001/api/health` (CSP header present) vs
+  `/api/docs` (absent). CSP is browser-enforced, so a plain `curl` of the docs page returns 200 even
+  when the UI is broken — check the header, not just the status code.
 - A **global** `ThrottlerGuard` (via `APP_GUARD`) rate-limits everything — it is now the **only**
   global guard. Tighten a specific route with `@Throttle(...)` if it ever needs it.
 - Rate limiting is basic hygiene, **not** an access control: the API is open by design and is meant

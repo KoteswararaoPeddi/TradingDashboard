@@ -27,23 +27,29 @@ leaderboard, calendar heatmap, and a filterable trades table.
   ordering, CORS, global `api` prefix, shutdown hooks); `app.module.ts` with boot-validated config,
   global `ThrottlerGuard` + `ResponseInterceptor`; `PrismaService`/`PrismaModule`; a `health` module.
   Env is `NODE_ENV` / `DATABASE_URL` / `CORS_ORIGIN` / `PORT`.
+- **Swagger** — `@nestjs/swagger` serves interactive docs at **`/api/docs`** (spec at
+  `/api/docs-json`); `health` is documented with `@ApiTags`/`@ApiOperation`/`@ApiOkResponse`. This is
+  how endpoints get tested by hand. Verified live: UI 200 + renders, spec valid, `/api/health` returns
+  the wrapped envelope.
 - **Schema** — `TradingAccount` + `Trade` (+ `TradeSide` / `TradeStatus` enums), with
   `@@unique([accountId, ticket])` for idempotent CSV re-import and `@@index([accountId, closedAt])`.
+- **Database** — a dedicated **`trade_journal`** PostgreSQL database on `localhost:5432`, with
+  `backend/.env` pointing at it. Migration `20260716091717_init` is applied: `trading_accounts` +
+  `trades` exist with both enums and both indexes, verified in psql.
 - **Verified** — frontend + backend `tsc --noEmit` green; `prisma generate` green.
 
 **Not done yet:**
 
 - `theme.css` does not yet hold the dark trading tokens, and Inter is not yet the only font — so the
   placeholder pages do not match the design. This is the remaining Phase 0 task.
-- **No DB migration has run.** Run `npx prisma migrate dev --name init` (needs a reachable
-  `DATABASE_URL`) to create the `trading_accounts` / `trades` tables.
-- `health` is the only backend feature module — `accounts` and `trades` are not built.
+- `health` is the only backend feature module — `accounts` and `trades` are not built. The tables
+  exist but nothing reads or writes them yet.
 - No `features/` slices exist on the frontend; the whole dashboard cockpit is unbuilt.
 
 **Next:**
 
-- Repoint `theme.css` + fonts to the dark design (finishes Phase 0), run the init migration, then
-  build the `accounts` slice (Phase 1) and the `trades` slice (Phase 2), then the dashboard cockpit
+- Repoint `theme.css` + fonts to the dark design (finishes Phase 0), then build the `accounts` slice
+  (Phase 1) and the `trades` slice (Phase 2) against the migrated database, then the dashboard cockpit
   (metrics → overview/stats → charts → filters/insights/calendar/table → export/theme).
 
 ---
@@ -53,7 +59,7 @@ leaderboard, calendar heatmap, and a filterable trades table.
 See build-plan.md for the full per-phase breakdown.
 
 - [~] Phase 0 — Foundation (scaffold + schema done; theme.css/fonts repoint pending)
-- [ ] Phase 1 — Trading Accounts (not started; `prisma migrate dev --name init` still to run)
+- [~] Phase 1 — Trading Accounts (DB + init migration done; `accounts` module + UI not started)
 - [ ] Phases 2–6 — Trades, Metrics/Overview/Stats, Charts, Filters/Insights/Calendar/Table, Export/Theme
 - [ ] Phase 7 — Polish
 
@@ -67,6 +73,10 @@ See build-plan.md for the full per-phase breakdown.
   to expose publicly as-is.
 - **Schema:** two models — `TradingAccount` + `Trade` (+ `TradeSide`/`TradeStatus` enums), with
   `@@unique([accountId, ticket])` so re-importing a broker CSV is idempotent.
+- **Dedicated database:** the app owns its own `trade_journal` PostgreSQL database rather than sharing
+  a database with any other project on the same server. One project per database keeps migrations,
+  resets, and `prisma migrate` drift detection scoped to this app alone — a `migrate reset` here can
+  never touch another project's data.
 - **Stack:** Frontend — Next.js 16 + React 19 + TypeScript (strict) + Tailwind v4 + shadcn/ui +
   **Chart.js** (`react-chartjs-2`). Backend — NestJS + Prisma + PostgreSQL. The frontend talks only to
   the NestJS REST API.
@@ -76,6 +86,13 @@ See build-plan.md for the full per-phase breakdown.
 - **Analytics:** derived **client-side** from the raw trade set via `features/dashboard/lib/metrics.ts`
   (the API returns raw trades). A backend analytics endpoint is an optional, approval-gated
   optimization only if client compute is ever too slow.
+- **Swagger over a REST client:** `@nestjs/swagger` generates the API docs from the DTOs and
+  controller decorators, so the docs can't drift from the code the way a hand-kept Postman collection
+  does. Cost: every endpoint carries `@Api*` decorators. Response examples must show the **wrapped**
+  `{ success, message, data }` envelope, since the global interceptor wraps what handlers return.
+- **helmet CSP is scoped, not disabled:** Swagger UI needs inline scripts that helmet's default CSP
+  blocks. Rather than turning CSP off app-wide, `/api/docs` is exempted and every other path keeps the
+  strict policy — the API serves only JSON, so the docs page is the sole HTML surface.
 - **No AI / no market feed / no execution** — this is a journal, not a terminal.
 
 ---

@@ -35,6 +35,9 @@ Items are only ticked when the code actually lands.
 - [x] **Backend scaffolded** — NestJS bootstrap (`main.ts`: helmet, `ValidationPipe`, filter ordering,
       CORS, `api` prefix, shutdown hooks), boot-validated config, global `ThrottlerGuard` +
       `ResponseInterceptor`, `PrismaService`/`PrismaModule`, and a `health` module.
+- [x] **Swagger / OpenAPI docs** — `@nestjs/swagger` wired in `main.ts`; interactive UI at
+      `/api/docs`, spec at `/api/docs-json`. The docs path is exempt from helmet's CSP so the UI can
+      boot. Every endpoint built from here on is documented as it lands (see library-docs.md).
 - [x] **Prisma schema defined** — `TradingAccount` + `Trade` (+ `TradeSide`/`TradeStatus` enums) with
       `@@unique([accountId, ticket])` and `@@index([accountId, closedAt])`.
 - [x] Both apps typecheck clean (`tsc --noEmit`); `prisma generate` clean.
@@ -48,8 +51,10 @@ Items are only ticked when the code actually lands.
 
 ## Phase 1 — Trading Accounts (the first real slice)
 
-- [ ] Run `prisma migrate dev --name init` against the DB to create the `TradingAccount`/`Trade`
-      tables. *(needs a reachable `DATABASE_URL`)*
+- [x] **Database + init migration** — a dedicated `trade_journal` PostgreSQL database, with
+      `backend/.env` pointing at it; migration `20260716091717_init` applied, creating
+      `trading_accounts` + `trades`, the `TradeSide`/`TradeStatus` enums, and both indexes
+      (`@@unique([accountId, ticket])`, `@@index([accountId, closedAt])`).
 - [ ] Backend `accounts` module: CRUD over `TradingAccount`; active account.
 - [ ] Frontend `accounts` slice + `settings` page: create/edit account (label, account number,
       starting balance, currency); active-account store; sidebar account card wired to the active one.
@@ -118,7 +123,7 @@ Items are only ticked when the code actually lands.
 | Phase                                   | Status        |
 | --------------------------------------- | ------------- |
 | 0 — Foundation                          | Scaffold + schema done; theme.css/fonts repoint pending |
-| 1 — Trading Accounts                    | Not started (DB `migrate dev --name init` still to run) |
+| 1 — Trading Accounts                    | DB + init migration done; `accounts` module + UI not started |
 | 2 — Trades                              | Not started   |
 | 3 — Metrics, Overview & Stats           | Not started   |
 | 4 — Charts (Chart.js)                   | Not started   |

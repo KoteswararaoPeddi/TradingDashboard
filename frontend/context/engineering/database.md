@@ -5,7 +5,7 @@ two models, `TradingAccount` → `Trade`, plus the enums `TradeSide` (`LONG|SHOR
 `TradeStatus` (`OPEN|CLOSED`). The app is single-user, so there is no ownership dimension — `accountId`
 is the only scoping column.
 
-**Status:** the init migration has not been run yet — `prisma migrate dev --name init` needs a reachable
-`DATABASE_URL`.
+**Status:** live. The schema is migrated (`20260716091717_init`) into a dedicated `trade_journal`
+PostgreSQL database — `trading_accounts` and `trades` exist with both enums and both indexes.
 
 ---

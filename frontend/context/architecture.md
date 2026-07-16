@@ -41,6 +41,7 @@ trade data — there is **no AI, no ML, and no third-party market data** in the 
 | Database     | PostgreSQL                             | Trading accounts, trades                                      |
 | Auth         | **none**                               | No auth library, no sessions, no user identity                |
 | Validation   | class-validator / class-transformer    | Request DTO validation + boot-time env validation             |
+| API docs     | `@nestjs/swagger`                      | Interactive OpenAPI docs at `/api/docs` — how endpoints get tested by hand |
 | Security     | helmet + `@nestjs/throttler`           | Security headers; basic rate limiting                         |
 | Logging      | nestjs-pino (pino)                     | Structured request logging via a `LoggingInterceptor`         |
 
