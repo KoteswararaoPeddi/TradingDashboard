@@ -19,9 +19,9 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "MediNex+ | Smarter Healthcare Connecting Doctors and Patients",
+  title: "Trade Journal | Personal Trading Analytics Dashboard",
   description:
-    "MediNex+ is a hospital management platform connecting doctors and patients. Manage appointments, staff, billing, and analytics in one secure platform.",
+    "Trade Journal is your personal trading-journal analytics dashboard. Log trades, track performance, and review your edge in one place.",
 };
 
 export default function RootLayout({

@@ -30,13 +30,13 @@ primitives, one set of conventions, one dark theme with the green-up / red-down 
 
 ## Layout
 
-- **Three layout contexts.**
-  - **Public** — a lightweight landing/marketing entry at `/` (or a redirect to `/dashboard` when
-    authenticated); no app chrome.
-  - **`(auth)`** — login/signup: a centered card on the dark background, no app chrome.
-  - **`(app)`** — the authenticated cockpit: a **persistent left sidebar** (`286px`, brand + section
-    nav + account card) beside a scrolling `main` with comfortable padding. This is the design's
-    `app-shell` grid (`sidebar minmax(0,1fr)`).
+- **Two layout contexts.** (There is no `(auth)` group — the app has no login.)
+  - **`/`** — redirects straight to `/dashboard`; no chrome of its own.
+  - **`(app)`** — the cockpit: a **persistent left sidebar** (`286px`, brand + section nav + account
+    card) beside a scrolling `main` with comfortable padding. This is the design's `app-shell` grid
+    (`sidebar minmax(0,1fr)`), rendered unguarded by `AppShell`.
+  - A **centered card on the dark background, no app chrome** remains the shape for any standalone
+    page (404, a simple confirmation) — see ui-registry.md → Centered page shell.
 - **The dashboard is one long page** of stacked panels in the design's order: Overview → Filters →
   Stats → Charts → Insights + Leaderboard → Calendar → Trades. The sidebar nav anchors to each
   section (`#overview`, `#filters`, …); the active link is reflected on scroll/click.
@@ -69,7 +69,7 @@ primitives, one set of conventions, one dark theme with the green-up / red-down 
 - **Badges carry meaning by color** — LONG = `up`/green, SHORT = `info`/blue, LIQUIDATION =
   `down`/red; result Profit = green, Loss = red, Breakeven = neutral grey. Never restyle these away
   from the P&L language.
-- Every form (add/edit trade, filters, account settings, auth) uses label + control + inline error,
+- Every form (add/edit trade, filters, account settings) uses label + control + inline error,
   driven by RHF + Zod (see code-standards.md).
 
 ---
@@ -110,8 +110,8 @@ primitives, one set of conventions, one dark theme with the green-up / red-down 
 - **Trades table:** #, Close Time, Hold Time, Asset, Direction, Size, Entry, Exit, Result, P&L,
   Running Balance, Ticket, Status; sticky header, hover rows, signed coloring, **Load More** paging,
   and a live trade count.
-- **Auth (login/signup):** a single centered card on the dark grid — logo, heading, form, primary
-  submit, link to the other auth page. Inline errors; submitting state.
+- **Add / edit trade:** a shadcn `Dialog` holding the form (asset, direction, size, entry/exit,
+  P&L, fees, open/close time, ticket) — inline errors, submitting state, toast on success.
 
 ---
 
@@ -167,7 +167,7 @@ separate sentence.
 - Never use raw Tailwind color classes for chrome (`bg-emerald-500`, `text-gray-400`, `text-white`,
   `bg-white`) — use tokens.
 - Never define colors in a config file — tokens live in `theme.css` (`@theme`).
-- Never reintroduce a light theme, Playfair/Poppins, or a serif font — dark theme, **Inter** only.
+- Never add a light theme, a display font, or a serif font — dark theme, **Inter** only.
 - Never use arbitrary `text-[Npx]` sizes or hardcoded `rounded-[..]` radii — use the type scale and
   `rounded-*` (8px family; `rounded-full` for badges/pills).
 - Never ship a form without validation, a submitting state, and a success/error message.

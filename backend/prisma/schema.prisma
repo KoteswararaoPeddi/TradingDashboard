@@ -1,6 +1,6 @@
-// MediNex+ domain model — multi-tenant hospital management. See context/architecture.md.
-// Every hospital is a tenant (`Hospital`); every data-bearing row is scoped to `hospitalId`
-// (+ the owning user where relevant). Deleting a hospital cascades to all its data.
+// Trade Journal domain model — a personal, single-user trading-journal dashboard.
+// There is no authentication and no per-user ownership: the app holds one person's
+// trading accounts and trades. See context/architecture.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -15,300 +15,56 @@ datasource db {
 // Enums
 // ---------------------------------------------------------------------------
 
-enum Plan {
-  STARTER
-  PRO
-  ENTERPRISE
+enum TradeSide {
+  LONG
+  SHORT
+  LIQUIDATION
 }
 
-enum Role {
-  SUPER_ADMIN
-  HOSPITAL_ADMIN
-  DOCTOR
-  STAFF
-  PATIENT
-}
-
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-}
-
-enum AppointmentStatus {
-  SCHEDULED
-  CONFIRMED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum PrescriptionSource {
-  AI
-  MANUAL
-}
-
-// An AI-drafted prescription is created as DRAFT; only a doctor's review sets it APPROVED.
-enum PrescriptionStatus {
-  DRAFT
-  APPROVED
-}
-
-enum LabStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-}
-
-enum InvoiceStatus {
-  PENDING
-  PAID
-  CANCELLED
+enum TradeStatus {
+  OPEN
+  CLOSED
 }
 
 // ---------------------------------------------------------------------------
-// Tenant
+// Trading
 // ---------------------------------------------------------------------------
 
-model Hospital {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  plan      Plan     @default(STARTER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users         User[]
-  departments   Department[]
-  doctors       Doctor[]
-  patients      Patient[]
-  appointments  Appointment[]
-  prescriptions Prescription[]
-  pharmacyItems PharmacyItem[]
-  labOrders     LabOrder[]
-  invoices      Invoice[]
-
-  @@map("hospitals")
-}
-
-// ---------------------------------------------------------------------------
-// Identity
-// ---------------------------------------------------------------------------
-
-model User {
-  id                 String   @id @default(cuid())
-  hospitalId         String
-  email              String   @unique
-  passwordHash       String
-  hashedRefreshToken String? // bcrypt hash of the current refresh token; null = logged out
-  role               Role     @default(STAFF)
-  name               String
-  phone              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  doctor   Doctor?
-
-  @@index([hospitalId])
-  @@map("users")
-}
-
-// ---------------------------------------------------------------------------
-// Clinical
-// ---------------------------------------------------------------------------
-
-model Department {
-  id         String @id @default(cuid())
-  hospitalId String
-  name       String
-
-  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  doctors  Doctor[]
-
-  @@index([hospitalId])
-  @@map("departments")
-}
-
-model Doctor {
-  id           String   @id @default(cuid())
-  hospitalId   String
-  userId       String?  @unique
-  departmentId String?
-  name         String
-  specialty    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  hospital      Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  appointments  Appointment[]
-  prescriptions Prescription[]
-
-  @@index([hospitalId])
-  @@index([hospitalId, departmentId])
-  @@map("doctors")
-}
-
-model Patient {
-  id         String    @id @default(cuid())
-  hospitalId String
-  name       String
-  gender     Gender?
-  dob        DateTime? @db.Date
-  contact    String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  hospital      Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  appointments  Appointment[]
-  prescriptions Prescription[]
-  labOrders     LabOrder[]
-  invoices      Invoice[]
-
-  @@index([hospitalId])
-  @@map("patients")
-}
-
-model Appointment {
-  id          String            @id @default(cuid())
-  hospitalId  String
-  patientId   String
-  doctorId    String
-  scheduledAt DateTime
-  status      AppointmentStatus @default(SCHEDULED)
-  reason      String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  hospital     Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  prescription Prescription?
-
-  @@index([hospitalId])
-  @@index([hospitalId, scheduledAt])
-  @@index([doctorId])
-  @@index([patientId])
-  @@map("appointments")
-}
-
-model Prescription {
-  id            String             @id @default(cuid())
-  hospitalId    String
-  appointmentId String?            @unique
-  doctorId      String
-  patientId     String
-  diagnosis     String?
-  items         Json // [{ name, dosage, frequency, duration }]
-  source        PrescriptionSource @default(MANUAL)
-  status        PrescriptionStatus @default(DRAFT)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-
-  hospital    Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  @@index([hospitalId])
-  @@index([patientId])
-  @@map("prescriptions")
-}
-
-// ---------------------------------------------------------------------------
-// Operations
-// ---------------------------------------------------------------------------
-
-model PharmacyItem {
-  id         String    @id @default(cuid())
-  hospitalId String
-  name       String
-  stock      Int       @default(0)
-  batch      String?
-  expiry     DateTime? @db.Date
-  price      Decimal   @default(0) @db.Decimal(10, 2)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-
-  @@index([hospitalId])
-  @@map("pharmacy_items")
-}
-
-model LabOrder {
-  id         String    @id @default(cuid())
-  hospitalId String
-  patientId  String
-  test       String
-  status     LabStatus @default(PENDING)
-  resultUrl  String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  @@index([hospitalId])
-  @@index([patientId])
-  @@map("lab_orders")
-}
-
-model Invoice {
-  id         String        @id @default(cuid())
-  hospitalId String
-  patientId  String
-  lineItems  Json // [{ description, amount }]
-  total      Decimal       @default(0) @db.Decimal(10, 2)
-  status     InvoiceStatus @default(PENDING)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-
-  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  @@index([hospitalId])
-  @@index([patientId])
-  @@map("invoices")
-}
-
-// ---------------------------------------------------------------------------
-// Signup — pending hospital registration awaiting email OTP verification.
-// The real Hospital/User rows are created only once the OTP is verified;
-// expired or superseded rows are overwritten (email is unique).
-// ---------------------------------------------------------------------------
-
-model SignupOtp {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  otpHash      String // bcrypt hash of the 6-digit code
-  hospitalName String
-  adminName    String
-  phone        String?
-  passwordHash String // bcrypt hash of the chosen password
-  attempts     Int      @default(0)
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("signup_otps")
-}
-
-// Public marketing lead — a "Book a demo" request. Not tenant-scoped (the sender
-// is a prospect, not yet a hospital).
-model DemoRequest {
+model TradingAccount {
   id              String   @id @default(cuid())
-  fullName        String
-  hospitalName    String
-  contactNumber   String
-  email           String
-  hospitalAddress String
-  preferredDate   DateTime @db.Date
-  preferredTime   String // "HH:mm" time-of-day
+  label           String
+  accountNumber   String   @unique
+  startingBalance Float    @default(0)
+  currency        String   @default("USD")
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([createdAt])
-  @@map("demo_requests")
+  trades Trade[]
+
+  @@map("trading_accounts")
+}
+
+model Trade {
+  id         String      @id @default(cuid())
+  accountId  String
+  symbol     String
+  side       TradeSide
+  size       String? // e.g. "1/1", "0.25/0.25" (requested/filled), free-form
+  entryPrice Float?
+  exitPrice  Float?
+  grossPnl   Float       @default(0)
+  netPnl     Float       @default(0)
+  fees       Float       @default(0)
+  openedAt   DateTime?
+  closedAt   DateTime
+  ticket     String?
+  status     TradeStatus @default(CLOSED)
+  createdAt  DateTime    @default(now())
+
+  account TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // A broker ticket is unique within an account, so re-importing a CSV is idempotent.
+  @@unique([accountId, ticket])
+  @@index([accountId, closedAt])
+  @@map("trades")
 }

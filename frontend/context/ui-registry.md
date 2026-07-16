@@ -17,14 +17,11 @@ note. Feature composites are logged here as they are built.
 
 ---
 
-> **Trade Journal pivot:** this registry is being repointed from the old hospital scaffold to the
-> **trading-journal dashboard** in `context/designs/website.index.html`. The old landing/hospital
-> composites are removed from the registry; the **dashboard composites below are the target patterns
-> from the design** and are logged as "built" only once their code lands. The shadcn primitives and
-> the auth form/card patterns carry over (they are domain-agnostic). Theme is now **dark** with the
-> green-up / red-down P&L language — class names using semantic tokens (`bg-surface`,
-> `text-foreground`, `text-up`/`text-down`, `border-border`) are correct once the tokens are
-> repointed in `theme.css`.
+> **Status:** the **dashboard composites below are the target patterns from the design**
+> (`context/designs/website.index.html`) and are logged as "built" only once their code lands. The
+> theme is **dark** with the green-up / red-down P&L language; components are written against the
+> semantic tokens (`bg-surface`, `text-foreground`, `text-up`/`text-down`, `border-border`), which
+> resolve correctly once the tokens are repointed in `theme.css`.
 
 ---
 
@@ -51,16 +48,14 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 | Card / Panel | `ui/card.tsx` | Base surface: `rounded-lg border border-border bg-surface shadow-panel overflow-hidden`. The dashboard **Panel** composite (below) wraps this with the header/body structure. `bg-card` resolves to `--surface`. |
 | Badge | `ui/badge.tsx` | cva chip, `rounded-full`. The trading **SideBadge** / **ResultBadge** (below) are the semantic variants — LONG green / SHORT blue / LIQUIDATION red; Profit green / Loss red / Breakeven grey. |
 | Separator | `ui/separator.tsx` | Token `bg-border` rule; `h-px w-full` / `w-px h-full`. |
-| Input | `ui/input.tsx` | Dark input: `bg-input border-border`, focus ring blue (`--ring`). RHF `register()` ref flows through via React 19 ref-as-prop. Used by filters, add-trade, settings, auth. |
+| Input | `ui/input.tsx` | Dark input: `bg-input border-border`, focus ring blue (`--ring`). RHF `register()` ref flows through via React 19 ref-as-prop. Used by filters, add-trade, settings. |
 | Select | `ui/select.tsx` | **shadcn** (base-ui). Filter selects (asset/direction/result/sort). Controlled via `value`/`onValueChange`; with RHF use a `Controller`. Dark popover surface. |
 | Field | `ui/field.tsx` | Wrapper: `Label` + control + `error` (`text-body-sm text-down`); `flex flex-col gap-1.5`; optional muted `hint`. Use for every form field. |
 | Label | `ui/label.tsx` | `<label>`, `text-body-sm font-medium text-foreground select-none`. |
-| PasswordInput | `ui/password-input.tsx` | **Composite**: `Input` + eye/eye-off toggle. Used by Login/Signup. |
-| InputOTP | `ui/input-otp.tsx` | shadcn `input-otp` — 6 slots. Signup step 2 (email OTP). Wire via RHF `Controller`. |
 | Typography | `ui/typography/` | Polymorphic text component. **All content text goes through it** (variant + weight props); color/layout via `className`. Numeric displays use the heavy weights. |
 | Dialog | `ui/dialog.tsx` | **shadcn** (base-ui). Add-trade / edit-trade / confirm dialogs. Controlled via `open`/`onOpenChange`; built-in ✕ (`showCloseButton={false}` to hide). |
 | Table | `ui/table.tsx` | **shadcn**, CLI-installed when the trades table lands. Sticky `th`, hover rows, `overflow-x-auto` wrapper (the table `min-width` forces horizontal scroll on mobile). |
-| DropdownMenu | `ui/dropdown-menu.tsx` | **shadcn** (base-ui). User menu / row actions. |
+| DropdownMenu | `ui/dropdown-menu.tsx` | **shadcn** (base-ui). Row actions / overflow menus. (The user menu it also served is gone — no auth.) |
 | Skeleton | `ui/skeleton.tsx` | **shadcn** (`animate-pulse rounded-md bg-muted`). **Use for all loading placeholders** — pass geometry via `className`. Never hand-roll `animate-pulse` divs. |
 | Toaster | sonner (in `GlobalHosts`) | sonner `<Toaster position="top-right" richColors />` mounted once in root `layout.tsx`. Call `toast.loading/success/error` anywhere. |
 
@@ -74,7 +69,7 @@ The trading cockpit's custom composites (no shadcn equivalent). Build each on `C
 
 | Composite | Pattern (design classes → tokens) |
 | --------- | --------------------------------- |
-| **AppShell / Sidebar** | `app-shell` grid `[286px_minmax(0,1fr)]`; sidebar sticky, `bg-surface/88 backdrop-blur border-r border-border`, `flex-col gap`. Below 1180px → horizontal nav strip, account card hidden. |
+| **AppShell / Sidebar** | `src/shared/components/AppShell.tsx` — `app-shell` grid `[286px_minmax(0,1fr)]`; sidebar sticky, `bg-surface/88 backdrop-blur border-r border-border`, `flex-col gap`. Below 1180px → horizontal nav strip, account card hidden. **No session guard and no user menu** (the app has no auth); the `(app)` layout renders it unguarded. |
 | **Sidebar brand** | brand row: `TJ` mark (`size-11 rounded-lg` green→blue gradient, `text-primary-fg font-black`) + title `text-h4 font-extrabold` over muted uppercase account label. |
 | **Sidebar nav** | numbered links (`nav-icon` `size-6 rounded bg-surface-raised text-primary` + label `text-body-sm font-bold`); active = `bg-surface-raised text-foreground border border-border`. Anchors to section ids. |
 | **AccountCard** | pinned card (`mt-auto`, gradient surface, `shadow-panel`): big balance (`text-display-lg font-black`, signed color) + 2×2 minis (Net P&L / Growth / Win Rate / Trades) on `bg-black/22` wells. |
@@ -107,14 +102,10 @@ Chart defaults (grid `rgba(255,255,255,.055)`, tick `--muted`, tooltip on `--sur
 
 ---
 
-## Auth pattern — carried over from the scaffold
+## Form pattern (RHF + Zod + Field + toast)
 
-The reusable form/card shapes still apply on the dark theme. **Every future form, form-card, and
-full-page centered shell should match these** (token colors resolve to dark values).
-
-### Auth form (`LoginForm`)
-
-File: `src/features/auth/components/LoginForm.tsx`
+The project's **one form shape** — the target for **add-trade**, **edit-trade**, and
+**account-settings**. Build every new form to match.
 
 | Property | Class |
 | -------- | ----- |
@@ -124,40 +115,27 @@ File: `src/features/auth/components/LoginForm.tsx`
 | Field error text | `text-body-sm text-down` (via `Field` `error` prop) |
 | Submit feedback | **toast** (sonner) — `toast.loading(...)` → `toast.success`/`toast.error` with the same `id` |
 | Submit button | `Button` (default) `mt-2 w-full`; `disabled` while submitting |
-| Submitting label | swap text to `"...ing"` (`Signing in...`, `Creating account...`) |
+| Submitting label | swap text to the progressive form (`Saving...`, `Importing...`) |
 
-**Pattern notes:** every form uses **RHF + Zod** with `mode: "onBlur"`; the Zod schema in
-`schemas/*.schema.ts` is the single source of truth. **Inline field errors** come from `Field`.
-**Submit/API feedback goes to a toast**, not an inline banner. `noValidate` on the `<form>`; inputs
-set `aria-invalid` from the field error. Reuse this exact shape for **add-trade**, **edit-trade**,
-and **account-settings** forms.
+**Pattern notes:** every form uses **RHF + Zod** with `mode: "onBlur"`; the Zod schema in the
+feature's `schemas/*.schema.ts` is the single source of truth. **Inline field errors** come from
+`Field`. **Submit/API feedback goes to a toast**, not an inline banner. `noValidate` on the `<form>`;
+inputs set `aria-invalid` from the field error. Numeric trade fields coerce/validate as numbers;
+`side` validates against the `TradeSide` enum.
 
-### Auth card page (`login` page)
+### Form card
 
-File: `src/app/(auth)/login/page.tsx`
+A form that isn't inline in a panel sits in a card: `Card` primitive `w-full max-w-sm shadow-panel`
+(`bg-surface border-border rounded-lg`) · `CardHeader` `text-center` · `CardTitle` `text-h3
+text-foreground` · `CardDescription` (`text-body-sm text-muted-foreground`) · `CardContent`
+`flex flex-col gap-6`. A thin **Server Component** renders the client form inside it and sets its own
+`metadata.title`.
 
-| Property | Class |
-| -------- | ----- |
-| Card | `Card` primitive `w-full max-w-sm shadow-panel` (`bg-surface border-border rounded-lg`) |
-| Header | `CardHeader` `text-center` |
-| Title | `CardTitle` `text-h3 text-foreground` |
-| Description | `CardDescription` (`text-body-sm text-muted-foreground`) |
-| Content | `CardContent` `flex flex-col gap-6` |
-| Footer link row | `text-center text-body-sm text-muted-foreground`; link `text-info hover:underline` |
+### Centered page shell
 
-**Pattern notes:** a thin **Server Component** rendering the client form in a `max-w-sm` card; sets
-its own `metadata.title`; cross-link below in muted text with a `text-info` link.
-
-### Centered page shell (`(auth)` layout)
-
-File: `src/app/(auth)/layout.tsx`
-
-| Property | Class |
-| -------- | ----- |
-| Shell | `main` `flex min-h-screen items-center justify-center bg-background px-4 py-10` |
-
-Full-height centered container on the dark grid background, no app chrome. Reuse for any standalone
-centered page (auth, 404, simple confirmations).
+`main` `flex min-h-screen items-center justify-center bg-background px-4 py-10` — a full-height
+centered container on the dark grid background, no app chrome. Reuse for any standalone centered page
+(404, a simple confirmation, a standalone form).
 
 ---
 

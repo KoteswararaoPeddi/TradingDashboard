@@ -9,68 +9,62 @@ The reference build is `context/designs/website.index.html`.
 ## Core Principle
 
 Build **vertical slices, back to front**. For each feature: define the Prisma model + NestJS module +
-DTOs (user-scoped), expose the endpoint, then build the frontend service + UI against it and verify
-the whole slice end to end. Auth + per-user ownership come first because every other slice is
-per-user. Analytics are **derived on the client** from the raw trade set (`lib/metrics.ts`) — the API
-returns raw trades, not computed metrics.
+DTOs, expose the endpoint, then build the frontend service + UI against it and verify the whole slice
+end to end. **Trading Accounts is the first real slice** — every other slice hangs off an account.
+Analytics are **derived on the client** from the raw trade set (`lib/metrics.ts`) — the API returns
+raw trades, not computed metrics.
+
+> **No auth.** There is no login/signup/OTP/JWT phase and no user identity: this is an open,
+> single-user personal app for local use (see architecture.md → Single-user, no auth). Data is scoped
+> by `accountId` only.
 
 The API is the source of truth; no mock data layer stands in for it. Where UI must render before its
 endpoint exists, stub the service behind a typed interface and replace it when the endpoint lands.
 
-> **Honesty note:** the underlying repo code today is still the **copied hospital scaffold**
-> (multi-tenant `Hospital`/`Patient`/... Prisma schema, hospital auth service). Phase 0 below rewrote
-> the **context docs** to the trading domain; the code changes (theme repoint, schema strip to
-> per-user, removing hospital modules/UI) are **still pending**. Items are only ticked when the code
-> actually lands.
+Items are only ticked when the code actually lands.
 
 ---
 
-## Phase 0 — Context & Theme Pivot (current)
+## Phase 0 — Foundation (current)
 
-- [x] **Context docs rewritten to Trade Journal** — project-overview, architecture, ui-tokens,
-      ui-rules, ui-registry, code-standards, library-docs, build-plan, progress-tracker, and the
-      engineering logs now describe the trading-journal dashboard from the design.
+- [x] **Frontend app scaffolded** — Next.js 16 + React 19 + TypeScript (strict), App Router with an
+      `(app)` route group; `/` redirects to `/dashboard`; shadcn/ui primitives in
+      `src/shared/components/ui`; Tailwind v4 with `theme.css` imported by `globals.css`.
+- [x] **App shell** — `src/shared/components/AppShell.tsx` renders the chrome (brand + nav) around
+      the `(app)` pages; `shared/config/app-nav.ts` drives the nav.
+- [x] **Backend scaffolded** — NestJS bootstrap (`main.ts`: helmet, `ValidationPipe`, filter ordering,
+      CORS, `api` prefix, shutdown hooks), boot-validated config, global `ThrottlerGuard` +
+      `ResponseInterceptor`, `PrismaService`/`PrismaModule`, and a `health` module.
+- [x] **Prisma schema defined** — `TradingAccount` + `Trade` (+ `TradeSide`/`TradeStatus` enums) with
+      `@@unique([accountId, ticket])` and `@@index([accountId, closedAt])`.
+- [x] Both apps typecheck clean (`tsc --noEmit`); `prisma generate` clean.
 - [ ] **Repoint `theme.css` to the dark trading tokens** — dark surface ramp (`#05070b`/`#0b1018`/…),
       green/teal `primary` (switchable green/violet/gold via `data-accent`), blue/gold/purple accents,
       **green-up / red-down** P&L tokens, 8px radius, `shadow-panel`, the app background grid.
-- [ ] **Fonts → Inter only** — remove Playfair Display / any display font from the root layout + tokens.
-- [ ] **Remove the legacy hospital/landing UI** (landing sections, hospital dashboard/settings
-      composites) and repair the app shell so the build stays green.
-- [ ] Verify `npm run build` clean on the pivoted theme + shell.
+- [ ] **Fonts → Inter only** — Inter via `next/font/google` wired to `--font-sans`; no display or
+      serif font.
 
 ---
 
-## Phase 1 — Authentication & Per-user Ownership (everything else depends on this)
+## Phase 1 — Trading Accounts (the first real slice)
 
-- [~] Backend `auth` module: **2-step email-OTP signup**, login (bcryptjs), JWT issue/verify
-      (httpOnly cookies), logout, `/auth/me` — **exists in the scaffold** (currently provisions a
-      hospital org; strip to a single `User`).
-- [ ] **Strip multi-tenancy → per-user**: signup creates a single `User` (no `Hospital`/tenant); the
-      JWT payload carries only `sub` (userId); remove `hospitalId` from the schema and queries.
-- [ ] Add **`POST /auth/refresh`** (refresh-token rotation) — the known missing endpoint.
-- [ ] Frontend `(auth)` pages rebranded (login + signup wizard) on the dark theme.
-- [ ] `(app)` layout guards the session; unauthenticated users redirect to `/login`.
-- [ ] Verified: signup → OTP email → verify → `User` created → session; login/wrong-password; guard.
-
----
-
-## Phase 2 — Trading Accounts
-
-- [ ] Backend `accounts` module (user-scoped): `TradingAccount` model + migration; CRUD; active account.
+- [ ] Run `prisma migrate dev --name init` against the DB to create the `TradingAccount`/`Trade`
+      tables. *(needs a reachable `DATABASE_URL`)*
+- [ ] Backend `accounts` module: CRUD over `TradingAccount`; active account.
 - [ ] Frontend `accounts` slice + `settings` page: create/edit account (label, account number,
       starting balance, currency); active-account store; sidebar account card wired to the active one.
 
 ---
 
-## Phase 3 — Trades
+## Phase 2 — Trades
 
-- [ ] Backend `trades` module (user + account scoped): `Trade` model + migration (`TradeSide` /
-      `TradeStatus` enums); CRUD; **CSV import** (validate rows, dedupe on `ticket`, idempotent).
+- [ ] Backend `trades` module (account-scoped): CRUD; **CSV import** (validate rows, dedupe on
+      `ticket` via `@@unique([accountId, ticket])`, idempotent).
 - [ ] Frontend `trades.service` + add/edit/delete trade forms (RHF + Zod) + CSV import; confirm-before-delete.
 
 ---
 
-## Phase 4 — Metrics, Overview & Stats
+## Phase 3 — Metrics, Overview & Stats
 
 - [ ] `features/dashboard/lib/metrics.ts` — pure metric bundle from the trade set (running balance,
       equity curve, win rate, gross/net, profit factor, best/worst, long/short splits, streaks, max
@@ -81,7 +75,7 @@ endpoint exists, stub the service behind a typed interface and replace it when t
 
 ---
 
-## Phase 5 — Charts (Chart.js)
+## Phase 4 — Charts (Chart.js)
 
 - [ ] `shared/config/chart-theme.ts` (token-driven defaults) + registration module.
 - [ ] Seven charts (dynamic-imported, `ssr:false`): equity curve, daily P&L, weekday, hourly, asset,
@@ -89,7 +83,7 @@ endpoint exists, stub the service behind a typed interface and replace it when t
 
 ---
 
-## Phase 6 — Filters, Insights, Leaderboard, Calendar & Trades Table
+## Phase 5 — Filters, Insights, Leaderboard, Calendar & Trades Table
 
 - [ ] Filter bar (search + asset/direction/result selects + date range + min/max P&L + sort) + quick
       presets (All / Today / Last 7 Days / Winners / Losses / Liquidations); every panel recomputes off
@@ -101,7 +95,7 @@ endpoint exists, stub the service behind a typed interface and replace it when t
 
 ---
 
-## Phase 7 — Export, Summary & Accent Theme
+## Phase 6 — Export, Summary & Accent Theme
 
 - [ ] Export CSV of the filtered set (client-side `Blob` download).
 - [ ] Copy Summary (plain-text performance summary of the active view) via clipboard + toast.
@@ -109,7 +103,7 @@ endpoint exists, stub the service behind a typed interface and replace it when t
 
 ---
 
-## Phase 8 — Polish
+## Phase 7 — Polish
 
 - [ ] Responsive pass across mobile, tablet, desktop (sidebar collapse, grid reflow, table/chart scroll).
 - [ ] Loading / empty / error states for each panel (see ui-rules.md → States).
@@ -123,12 +117,11 @@ endpoint exists, stub the service behind a typed interface and replace it when t
 
 | Phase                                   | Status        |
 | --------------------------------------- | ------------- |
-| 0 — Context & Theme Pivot               | Docs done; theme/fonts repoint + hospital-UI removal pending |
-| 1 — Auth & Per-user Ownership           | Auth scaffold exists (hospital-flavored); strip to per-user + `/auth/refresh` + guard pending |
-| 2 — Trading Accounts                    | Not started   |
-| 3 — Trades                              | Not started   |
-| 4 — Metrics, Overview & Stats           | Not started   |
-| 5 — Charts (Chart.js)                   | Not started   |
-| 6 — Filters, Insights, Calendar, Table  | Not started   |
-| 7 — Export, Summary & Accent Theme      | Not started   |
-| 8 — Polish                              | Not started   |
+| 0 — Foundation                          | Scaffold + schema done; theme.css/fonts repoint pending |
+| 1 — Trading Accounts                    | Not started (DB `migrate dev --name init` still to run) |
+| 2 — Trades                              | Not started   |
+| 3 — Metrics, Overview & Stats           | Not started   |
+| 4 — Charts (Chart.js)                   | Not started   |
+| 5 — Filters, Insights, Calendar, Table  | Not started   |
+| 6 — Export, Summary & Accent Theme      | Not started   |
+| 7 — Polish                              | Not started   |

@@ -1,9 +1,9 @@
 # Engineering Decision Log
 
-A **learning-first** record of the non-obvious engineering decisions in **Trade Journal** — a
-single-user trading-journal analytics dashboard — the real "forks in the road" where one technique
-was chosen over an alternative. It exists so the decisions can be *learned from* and *transferred*,
-not just remembered.
+A **learning-first** record of the non-obvious engineering decisions in **Trade Journal** — a personal,
+single-user trading-journal analytics dashboard — the real "forks in the road" where one technique was
+chosen over an alternative. It exists so the decisions can be *learned from* and *transferred*, not just
+remembered.
 
 This log is deliberately kept **out of the pre-read/context pipeline** (`AGENTS.md` step list).
 It is reader-facing documentation, not builder input — read it to learn, don't load it to build.
@@ -13,19 +13,17 @@ It is reader-facing documentation, not builder input — read it to learn, don't
 | File | Area | Status |
 |------|------|--------|
 | [frontend.md](frontend.md) | Next.js App Router, rendering, state, data-fetching, UX/a11y | Populated |
-| [backend.md](backend.md) | NestJS structure, bootstrap, API envelope, errors | Populated (⚠ trades/accounts modules not yet built — see file) |
-| [database.md](database.md) | Prisma schema, relations, indexing, JSON columns | Populated (⚠ target-schema notes — see file) |
-| [auth-security.md](auth-security.md) | Cookies, token refresh, guards, hardening | Populated |
+| [backend.md](backend.md) | NestJS structure, bootstrap, API envelope, errors | Populated |
+| [database.md](database.md) | Prisma schema, relations, indexing, JSON columns | Populated |
 | [ai.md](ai.md) | LLM / structured output / retries / cost | Placeholder — no AI code, none planned |
 | [ai-agents.md](ai-agents.md) | Agent orchestration | Placeholder — no such code, none planned |
 | [mcp.md](mcp.md) | Model Context Protocol integrations | Placeholder — no such code, none planned |
 
-> **Honesty note.** Entries reflect what is *actually in the repo today*, not an aspirational total.
-> The live backend is still the scaffolded auth/mail/health (+ demo-request) modules — the
-> trades/accounts features are **not built yet**. Stack-level entries describe real, present code;
-> trading-domain *examples* are labelled as **target patterns** where the code doesn't exist yet, and
-> anything broken or contradicting the product is recorded as a **Gotcha** rather than dressed up as a
-> decision.
+> **Scope note.** Entries reflect what is *actually in the repo today*, not an aspirational total. The
+> accounts and trades features aren't built yet, so those areas are thin — what's logged so far is mostly
+> the foundations (bootstrap, error handling, the API envelope, the schema, the shared UI layer). Expect
+> this log to grow as the feature work lands. Anything broken or surprising is recorded as a **Gotcha**
+> rather than dressed up as a decision.
 
 ## The standard: the 5-part Learn template
 

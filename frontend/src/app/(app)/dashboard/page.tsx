@@ -1,22 +1,26 @@
 import type { Metadata } from "next"
 
-import { DashboardView } from "@features/dashboard/components/DashboardView"
+import { Card, CardContent } from "@components/ui/card"
+import { Typography } from "@components/ui/typography"
 
 export const metadata: Metadata = {
-  title: "Dashboard | MediNex+",
+  title: "Dashboard | Trade Journal",
 }
 
 export default function DashboardPage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-display-lg font-bold text-foreground">Dashboard</h1>
-        <p className="text-body-lg text-muted-foreground">
-          Welcome back! Here&apos;s your cooking overview
-        </p>
-      </div>
+      <Typography as="h1" variant="display-lg" weight="bold" className="text-foreground">
+        Dashboard
+      </Typography>
 
-      <DashboardView />
+      <Card>
+        <CardContent className="py-10 text-center">
+          <Typography variant="body-lg" className="text-muted-foreground">
+            Coming soon — your trading cockpit will live here.
+          </Typography>
+        </CardContent>
+      </Card>
     </div>
   )
 }

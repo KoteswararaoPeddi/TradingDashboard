@@ -1,21 +1,16 @@
 # Architecture
 
-Trade Journal is a **full-stack, single-user-owned** application in two deployables. The frontend
-renders the UI and talks **only** to our own REST API; the backend owns authentication, per-user data
-ownership, and persistence.
+Trade Journal is a **full-stack, single-user** application in two deployables. The frontend renders
+the UI and talks **only** to our own REST API; the backend owns validation and persistence. There is
+**no authentication** anywhere in the system.
 
 ```
 frontend/   → Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui + Chart.js
-backend/    → NestJS + Prisma + PostgreSQL  (REST API under /api, JWT auth, per-user ownership)
+backend/    → NestJS + Prisma + PostgreSQL  (open REST API under /api, no auth)
 ```
 
-The browser never sees the database or any secret/API key. All analytics are computed from the
-user's own trade data — there is **no AI, no ML, and no third-party market data** in the product.
-
-> **Migration note:** the `frontend/` started as a copied scaffold from a hospital-management SaaS.
-> That domain is being removed; the trading-journal domain replaces it. Retained scaffolding (auth,
-> app shell, shared UI, NestJS bootstrap) is rebranded. The backend domain model below is the
-> **target** for Trade Journal.
+The browser never sees the database or any secret/API key. All analytics are computed from your own
+trade data — there is **no AI, no ML, and no third-party market data** in the product.
 
 ---
 
@@ -33,9 +28,9 @@ user's own trade data — there is **no AI, no ML, and no third-party market dat
 | Charts       | **Chart.js** (`react-chartjs-2`)       | Equity curve, P&L bars, doughnut — matches the design         |
 | Icons        | lucide-react                           | Icon set                                                      |
 | Fonts        | `next/font/google` — Inter             | Inter base (`--font-inter`); no display/serif font           |
-| HTTP         | axios (shared instance)                | All API calls; JWT + 401-refresh handled by the interceptor  |
-| Forms        | React Hook Form + Zod                  | Add/edit trade, account settings, filters, auth              |
-| Client state | Zustand                                | Cross-cutting client state (`auth.store`, active-account, filters) |
+| HTTP         | axios (shared instance)                | All API calls; a minimal 403/5xx logger in the interceptor    |
+| Forms        | React Hook Form + Zod                  | Add/edit trade, account settings, filters                     |
+| Client state | Zustand                                | Cross-cutting client state (active-account, filters, accent)  |
 
 ### Backend
 
@@ -43,41 +38,48 @@ user's own trade data — there is **no AI, no ML, and no third-party market dat
 | ------------ | -------------------------------------- | ------------------------------------------------------------- |
 | Framework    | NestJS                                 | Modular REST API; controllers thin, services hold logic       |
 | ORM          | Prisma                                 | Typed DB access + migrations                                  |
-| Database     | PostgreSQL                             | Users, trading accounts, trades                               |
-| Auth         | Passport JWT + bcryptjs                | JWT sessions (HTTP-only cookies); password hashing            |
+| Database     | PostgreSQL                             | Trading accounts, trades                                      |
+| Auth         | **none**                               | No auth library, no sessions, no user identity                |
 | Validation   | class-validator / class-transformer    | Request DTO validation + boot-time env validation             |
-| Security     | helmet + `@nestjs/throttler`           | Security headers; rate limiting (esp. `/auth`)               |
+| Security     | helmet + `@nestjs/throttler`           | Security headers; basic rate limiting                         |
 | Logging      | nestjs-pino (pino)                     | Structured request logging via a `LoggingInterceptor`         |
-| Mail         | nodemailer (Gmail SMTP)                | Sign-up email OTP delivery                                    |
 
 > **No AI in this product.** There is no AI provider, no market-data feed, and no order execution.
-> The dashboard's numbers are derived from the user's own trade log.
+> The dashboard's numbers are derived from your own trade log.
 
 ---
 
-## Data ownership (per user)
+## Single-user, no auth
 
-Trade Journal is **single-user-owned**, not multi-tenant. Every user owns their own trading accounts
-and trades, and **every data-bearing query is scoped to the authenticated `userId`** (and `accountId`
-for account-scoped reads). The `userId` is derived from the verified JWT/session on the server —
-**never trusted from the client**. No query may read or write another user's data.
+Trade Journal is a **personal, single-user** app. There is **no authentication, no user identity, and
+no ownership scoping** — no login, signup, email OTP, JWT, or cookies. The data is simply "my accounts
+and my trades"; queries scope by **`accountId`** where a read belongs to one account, and by nothing
+else.
+
+> **Security note:** because the API is unauthenticated, anyone who can reach it can read and write
+> every trade. Trade Journal is intended for **local/personal use** and is **not safe to expose
+> publicly as-is**. Putting it on the internet would require adding an auth layer first.
 
 ---
 
-## Domain Model (Prisma / PostgreSQL) — target
+## Domain Model (Prisma / PostgreSQL)
+
+Two models. There is no user identity in the system.
 
 ```
-User            id, email (unique), passwordHash, name, createdAt
-TradingAccount  id, userId, label, accountNumber (unique per user),
-                startingBalance, currency, createdAt                      ← owned by a user
-Trade           id, userId, accountId, symbol, side (TradeSide),
-                size, entryPrice, exitPrice, grossPnl, netPnl, fees,
-                openedAt, closedAt, ticket, status (TradeStatus), createdAt
+TradingAccount  id, label, accountNumber (unique), startingBalance, currency,
+                createdAt, updatedAt, trades[]
+Trade           id, accountId, symbol, side (TradeSide), size,
+                entryPrice, exitPrice, grossPnl, netPnl, fees,
+                openedAt, closedAt, ticket, status (TradeStatus),
+                createdAt, account
+                @@unique([accountId, ticket])   @@index([accountId, closedAt])
 ```
 
 - `TradeSide` = `LONG | SHORT | LIQUIDATION`; `TradeStatus` = `OPEN | CLOSED` (enums).
-- **Never select or return `passwordHash`.** Every `Trade`/`TradingAccount` row is scoped to `userId`
-  (+ `accountId` where account-owned). A user's trades are never visible to another user.
+- `@@unique([accountId, ticket])` keeps a broker-CSV re-import **idempotent**;
+  `@@index([accountId, closedAt])` serves the per-account equity curve ordered by close time.
+- `Trade` cascades from its `TradingAccount` — deleting an account removes its trades.
 - **Analytics are derived, not stored.** Running balance, equity curve, drawdown, profit factor,
   streaks, and the per-asset / weekday / hour aggregates are **computed** from the trade set — the DB
   stores raw trades only. See "Analytics computation" below.
@@ -111,33 +113,34 @@ backend/
 ├── prisma/  (schema.prisma, migrations/, seed.ts)
 └── src/
     ├── main.ts          → bootstrap: pipes, filters, interceptors, helmet, CORS, shutdown hooks
-    ├── app.module.ts    → root: config + infra + all feature modules
+    ├── app.module.ts    → root: config + infra + all feature modules; global ThrottlerGuard only
     ├── config/          → typed, boot-validated configuration (app refuses to boot on bad env)
-    ├── common/          → cross-cutting, domain-agnostic (decorators, filters, interceptors, guards). Imports NOTHING from modules/.
+    ├── common/          → cross-cutting, domain-agnostic (filters, interceptors). Imports NOTHING from modules/.
     ├── prisma/          → PrismaService + PrismaModule (@Global)
     └── modules/         → one folder per domain
-        ├── auth/         → signup (email OTP) / login / refresh / logout, JwtStrategy, guard
-        ├── accounts/     → trading accounts (per user): CRUD, active account
-        ├── trades/       → trades (per user, account-scoped): CRUD + CSV import
-        ├── mail/         → OTP email delivery (nodemailer)
-        └── health/       → health check
+        ├── accounts/     → trading accounts: CRUD, active account      ← to build
+        ├── trades/       → trades (account-scoped): CRUD + CSV import  ← to build
+        └── health/       → health check                                ← built
 ```
 
-> `analytics/` may be added later only if server-side aggregation is needed. The legacy scaffold's
-> `demo/` (lead-capture) module may be kept for a public "contact/waitlist" form or removed — it is
-> not part of the trading domain.
+**Today `health` is the only feature module** (plus `prisma`, `config`, and the `common` filters +
+response interceptor). `accounts` and `trades` are **still to be built**.
+
+The only global guard is **`ThrottlerGuard`** (basic rate limiting), and every route is open.
+
+> `analytics/` may be added later only if server-side aggregation is needed.
 
 ### Discipline (what keeps it production-grade)
 
 - `common/` and `prisma/` **never import from `modules/`**. A module **never imports another
   module's internals** — only its **exported service** through the Nest module system.
-- **Controllers are thin** — HTTP only: route, `@CurrentUser()`, call service, return.
-- **Services own logic and persistence** — scope every query to `userId` (+ `accountId`), throw Nest
+- **Controllers are thin** — HTTP only: route, call service, return.
+- **Services own logic and persistence** — scope account-owned queries by `accountId`, throw Nest
   exceptions; never return raw DB errors.
 - **DTOs are the input contract** — every body is a validated class; `ValidationPipe({ whitelist:
-  true })` strips undeclared properties.
-- **Entities are the output contract** — class-transformer `@Exclude()`/`@Expose()` so `passwordHash`
-  can never serialize out.
+  true })` strips undeclared properties. With no auth layer, DTO validation is the **only** guard on
+  what enters the system — treat it as load-bearing.
+- **Entities are the output contract** — class-transformer `@Exclude()`/`@Expose()` shapes responses.
 
 ---
 
@@ -151,15 +154,13 @@ frontend/src/
 ├── app/
 │   ├── layout.tsx          → Root layout: metadata, Inter font, dark theme, GlobalHosts
 │   ├── globals.css         → Tailwind entry + imports theme.css + the app background grid
-│   ├── page.tsx            → "/" → landing (or redirect to /dashboard when authed)
-│   ├── (auth)/             → login + signup (centered, no app chrome)
-│   └── (app)/              → authenticated app shell (sidebar + main)
-│       ├── layout.tsx      → guards session; renders the AppShell (sidebar + topbar)
+│   ├── page.tsx            → "/" → redirects to /dashboard
+│   └── (app)/              → the app shell (sidebar + main); no guard
+│       ├── layout.tsx      → renders the AppShell (sidebar + topbar) — no session guard
 │       ├── dashboard/page.tsx   → the trading-journal cockpit (the design)
 │       └── settings/page.tsx    → account + preferences (starting balance, currency, accent)
 │
 ├── features/               → one vertical slice per domain
-│   ├── auth/               → login/signup forms, auth service, store
 │   ├── dashboard/          → the cockpit: overview, filters, stats, charts, insights,
 │   │                         leaderboard, calendar heatmap, trades table + lib/metrics.ts
 │   ├── accounts/           → account CRUD + active-account store
@@ -168,11 +169,12 @@ frontend/src/
 │
 └── shared/
     ├── components/ui/      → shadcn/ui primitives
-    ├── components/         → shared composites (AppShell/Sidebar/Topbar) + GlobalHosts (Toaster + ConfirmDialog)
+    ├── components/         → AppShell.tsx (sidebar + topbar; no session guard, no user menu),
+    │                         Sidebar/Topbar + GlobalHosts (Toaster + ConfirmDialog)
     ├── config/             → sidebar navigation config, chart theme defaults
     ├── constants/          → route paths, enum labels (sides, statuses, presets)
     ├── lib/                → axios.config.ts, utils.ts (cn), format (currency/date), csv
-    ├── stores/             → auth.store, confirm.store, theme-accent store (Zustand)
+    ├── stores/             → confirm.store, active-account, filter, theme-accent store (Zustand)
     ├── types/
     └── styles/theme.css    → design tokens (see ui-tokens.md)
 ```
@@ -197,10 +199,9 @@ the shared axios instance from `@lib/axios.config`.
   the accent switcher are the client leaves.
 - **Chart.js charts are dynamically imported** (`next/dynamic`, `ssr: false`) — the library is heavy
   and canvas needs the browser. Keep them out of first paint.
-- **All authenticated reads/writes go through the shared axios instance** (`@lib/axios.config`) to
-  feature **services** (`features/*/api/*.service.ts`). The interceptor owns 401-refresh, 403, 5xx.
-- **Auth** rides on HTTP-only cookies; axios uses `withCredentials: true`; on 401 it single-flights a
-  refresh and replays, redirecting to `/login` on failure.
+- **All reads/writes go through the shared axios instance** (`@lib/axios.config`) to feature
+  **services** (`features/*/api/*.service.ts`). The instance is now plain — `baseURL` plus a minimal
+  403/5xx logger. There is **no 401-refresh flow, no `withCredentials`, and no login redirect**.
 - **Metrics are derived client-side** from the fetched trade set via `features/dashboard/lib/metrics.ts`;
   filters/sort live in a store or local state and drive a single `renderDashboard`-equivalent recompute.
 
@@ -209,10 +210,9 @@ the shared axios instance from `@lib/axios.config`.
 ## Invariants
 
 - The **frontend never** holds secrets or talks to the database directly.
-- **Per-user ownership:** every data-bearing route is scoped to the authenticated `userId` (derived
-  from the verified session, never client-supplied) — no cross-user access. Account-scoped reads also
-  filter by `accountId`, verified to belong to the user.
-- **Never select, return, or log `passwordHash`.** Hash with bcryptjs; compare on login.
+- **No auth, no user identity.** Routes are open; account-owned reads/writes filter by `accountId`.
+  Don't add an auth concept (user, session, guard, ownership check) without a deliberate decision —
+  the open API is a **local/personal-use** trade-off, not an oversight.
 - Frontend: `src/app/*` holds route entries only — compose feature components; no business logic in
   pages/layouts. A feature never imports another feature's internals; `shared` never imports from
   `features`/`app`.
@@ -226,7 +226,8 @@ the shared axios instance from `@lib/axios.config`.
 - Backend: one **module per domain** under `src/modules/`; controllers thin, services hold logic;
   every request body is a validated DTO. `common/`/`prisma/` never import from `modules/`.
 - **Config is validated at boot**; read config via `ConfigService`, not `process.env`, in feature
-  code. **Secure by default** — global `JwtAuthGuard`; only `@Public()` routes are open.
+  code. Backend env is only `NODE_ENV`, `DATABASE_URL`, `CORS_ORIGIN`, `PORT`; the frontend's is only
+  `NEXT_PUBLIC_API_URL`. The single global guard is `ThrottlerGuard`.
 - **Dark theme**, **green/teal brand** (switchable green/violet/gold), **Inter** font, **green-up /
   red-down** P&L color — every surface uses semantic tokens. No hardcoded hex or raw Tailwind color
   classes in components.

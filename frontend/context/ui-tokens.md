@@ -127,7 +127,7 @@ Uppercase micro-labels (`strip-label`, stat `title`, table `th`) use `text-label
 
 - **Inter** is the only font, loaded via `next/font/google` in the root layout, exposed as
   `--font-inter`, wired to `--font-sans` in `@theme`; `html`/`body` applies `font-sans`. There is
-  **no Playfair / display / serif font** — do not reintroduce one.
+  **no display or serif font**.
 
 If `cn()` merges a custom `text-*` size token, that token must be registered in the
 `extendTailwindMerge` list in `src/shared/lib/utils.ts` (so a size class is not conflated with a
@@ -170,4 +170,4 @@ arbitrary pixel radii.
 - Borders default to `border-border`; `border-border-strong` for stronger edges. Never `border-gray-*`.
 - Radius comes from `--radius` (8px) via `rounded-*` — don't hardcode pixel radii.
 - Type uses the scale utilities — never arbitrary `text-[Npx]`. Numeric displays run heavy.
-- Font is **Inter** (`font-sans`) only — never reintroduce Playfair / Poppins / a serif.
+- Font is **Inter** (`font-sans`) only — no display or serif font.

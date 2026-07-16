@@ -45,16 +45,16 @@ every session — they prevent pattern drift. See architecture.md for structure.
   chart** are client boundaries. Push the boundary as low in the tree as possible.
 - Never add `"use client"` to a layout unless required.
 - Pages/layouts in `src/app` stay thin — they compose feature components and hold no business
-  logic. Route groups: `(auth)` for login/signup, `(app)` for the authenticated cockpit; `/` is the
-  public landing (or a redirect to `/dashboard`).
+  logic. One route group: `(app)` for the cockpit (rendered by `AppShell`, no guard); `/` redirects
+  to `/dashboard`. There is no `(auth)` group — the app has no login.
 - Use `next/font` (Inter), `next/image` for images, and `next/link` for navigation. **Dynamic-import
   the charts** (`next/dynamic`, `ssr: false`).
 
 ### Folder & file architecture (frontend)
 
 - `src/app/*` — route entries only (route groups, layouts, `page.tsx`).
-- `src/features/<domain>/` — one vertical slice per domain (`auth`, `dashboard`, `accounts`,
-  `settings`). A slice carries only the folders it uses: `components/`, `api/` (services),
+- `src/features/<domain>/` — one vertical slice per domain (`dashboard`, `accounts`, `settings`).
+  A slice carries only the folders it uses: `components/`, `api/` (services),
   `schemas/` (Zod), `hooks/`, `lib/` (pure logic, e.g. `dashboard/lib/metrics.ts`),
   `constants.ts`/`data/`, `stores/`, `types/`. Nest by kebab-case folder + `index.ts` barrel as a
   slice grows.
@@ -69,11 +69,12 @@ every session — they prevent pattern drift. See architecture.md for structure.
 
 ## Data Fetching & Services (frontend)
 
-- **All authenticated backend calls go through the shared axios instance** (`@lib/axios.config`)
-  via feature **services** (`features/<domain>/api/<domain>.service.ts`). Never a bare
-  `fetch`/`axios()` in a component.
+- **All backend calls go through the shared axios instance** (`@lib/axios.config`) via feature
+  **services** (`features/<domain>/api/<domain>.service.ts`). Never a bare `fetch`/`axios()` in a
+  component.
 - Services return **unwrapped, typed domain data** (unwrap the `{ success, message, data }`
-  envelope). The interceptor owns 401-refresh, 403, and 5xx — don't reimplement per call.
+  envelope). The interceptor owns 403 and 5xx — don't reimplement per call. There is no 401-refresh
+  flow (no auth).
 - A Client Component calls a service in an effect/handler (or via a small data hook); render
   **loading / empty / error** states for every data view (see ui-rules.md → States).
 - **Derived analytics are computed, not fetched.** The dashboard fetches the raw trade set
@@ -84,8 +85,8 @@ every session — they prevent pattern drift. See architecture.md for structure.
 
 ## Forms & validation
 
-- Every form uses **React Hook Form + Zod** (both installed): login, signup, add/edit trade, account
-  settings, and the trade filters. The Zod schema is the **single source of truth**, lives in the
+- Every form uses **React Hook Form + Zod** (both installed): add/edit trade, account settings, and
+  the trade filters. The Zod schema is the **single source of truth**, lives in the
   feature's `schemas/`, and types are derived with `z.infer`.
 - Validate before calling a service. Build inputs from the shared form-field components
   (`Field`/`Input`/`Select`), not raw inputs.
@@ -96,12 +97,9 @@ every session — they prevent pattern drift. See architecture.md for structure.
 
 ## Client State (Zustand)
 
-- Cross-cutting client state only — e.g. `auth.store` (user/session), the **active-account** store,
-  the **filter** state that drives the dashboard, and the **accent-theme** preference. Local UI state
-  stays in the component.
-- Select narrow slices: `useAuthStore((s) => s.user)`.
-- Auth checks in the client are **UX only** — the backend is the authorization source of truth
-  (every route scoped to `userId`).
+- Cross-cutting client state only — the **active-account** store, the **filter** state that drives the
+  dashboard, and the **accent-theme** preference. Local UI state stays in the component.
+- Select narrow slices: `useAccountStore((s) => s.activeAccountId)`.
 
 ---
 
@@ -160,7 +158,7 @@ Caching behavior changes across Next.js releases — **verify against the versio
 bundled docs are the source of truth.
 
 - **`fetch` is NOT cached by default** in Next 16, and an uncached fetch **blocks render** until it
-  resolves. Opt in deliberately. Authenticated trade data is per-user and dynamic — don't cache it.
+  resolves. Opt in deliberately. Trade data changes as you add/import trades — don't cache it.
 - **Cache Components / `use cache`** (`cacheComponents: true`): `"use cache"` atop an async data
   function or component; set duration with `cacheLife(...)`.
 - **Per-request dedup** — identical `fetch` calls are auto-memoized within one render; wrap non-`fetch`
@@ -220,10 +218,11 @@ Write → Measure → Find the bottleneck → Optimize → Measure again
 The backend is a modular monolith with four top-level layers (see architecture.md for the full tree):
 
 - `src/config/` — typed, **boot-validated** configuration.
-- `src/common/` — cross-cutting, domain-agnostic code (decorators, filters, interceptors, guards,
-  pipes, shared DTOs). **Imports nothing from `modules/`.**
+- `src/common/` — cross-cutting, domain-agnostic code (filters, interceptors, pipes, shared DTOs).
+  **Imports nothing from `modules/`.**
 - `src/prisma/` — the global `PrismaService` / `PrismaModule`.
-- `src/modules/<domain>/` — one folder per domain (`auth`, `accounts`, `trades`, `mail`, `health`).
+- `src/modules/<domain>/` — one folder per domain: `accounts`, `trades`, `health`. (Only `health` is
+  built today; `accounts` and `trades` are still to come.)
 
 **Module boundary rule:** `common/` and `prisma/` never import from `modules/`; a module never imports
 another module's internals — only its **exported service** through the Nest module system. This is
@@ -234,34 +233,35 @@ non-negotiable — it prevents circular dependencies.
 Every domain folder has the same shape: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`,
 `entities/`, `*.service.spec.ts`. The discipline:
 
-- **Controllers are thin** — HTTP only: route, pull `@CurrentUser()`, call the service, return. No
-  Prisma, no logic. A handler over ~5 lines means logic leaked in.
-- **Services own logic and persistence** — they take the authenticated `userId`, scope every query to
-  it (+ `accountId` where account-owned), and throw Nest exceptions (`NotFoundException`,
-  `ForbiddenException`, …) — never return a raw DB error.
+- **Controllers are thin** — HTTP only: route, call the service, return. No Prisma, no logic. A
+  handler over ~5 lines means logic leaked in.
+- **Services own logic and persistence** — they scope account-owned queries by `accountId` and throw
+  Nest exceptions (`NotFoundException`, …) — never return a raw DB error.
 - **DTOs are the input contract** — every request body is a class with `class-validator` decorators
   (`@IsString`, `@IsEnum(TradeSide)`, `@IsNumber`, …). `ValidationPipe({ whitelist: true, transform:
   true })` strips undeclared properties. `update-*.dto.ts` uses `PartialType(CreateDto)`.
 - **Entities are the output contract** — shape responses with class-transformer
-  (`@Exclude()`/`@Expose()`) so `passwordHash` can never serialize out.
+  (`@Exclude()`/`@Expose()`).
 
-### Secure by default
+### No auth — open routes, account-scoped queries
 
-- A global `JwtAuthGuard` protects **every** route; mark the few open routes with `@Public()`
-  (signup/login/refresh, health). Don't guard routes one by one.
-- The `userId` comes from the verified JWT via the `@CurrentUser()` decorator — **never** from a
-  client-supplied id, body, or param. Every per-user query is scoped to it; account-scoped queries
-  verify the `accountId` belongs to that user.
-- helmet (security headers) and `@nestjs/throttler` (rate limiting, especially on `/auth`) are always
-  on. `cookie-parser` enabled; CORS with `credentials: true`.
+- **There is no authentication.** No `JwtAuthGuard`, no `@Public()`, no `@CurrentUser()`, no user
+  identity. **Every route is open.** The only global guard is `ThrottlerGuard` (basic rate limiting).
+- **Scope by `accountId`** — an account-owned read/write filters on the `accountId` it was given.
+- helmet (security headers) and `@nestjs/throttler` are always on. CORS names the frontend origin.
+- Because the API is unauthenticated, Trade Journal is a **local/personal** tool and is **not safe to
+  expose publicly as-is**. Don't add a user/session/ownership concept without a deliberate decision —
+  and don't assume one exists.
+- With no auth layer, **DTO validation is the only guard on what enters the system** — treat it as
+  load-bearing.
 
 ### Config & data access
 
-- **Config is validated at boot** (`config/env.validation.ts`) — the app refuses to start on
-  missing/invalid `DATABASE_URL`, JWT secrets, or mail credentials. In feature code read config
-  through `ConfigService`, **never** `process.env`.
+- **Config is validated at boot** (`config/env.validation.ts`) — the app refuses to start on a
+  missing/invalid `DATABASE_URL`. In feature code read config through `ConfigService`, **never**
+  `process.env`.
 - Inject the single `PrismaService`; **never** `new PrismaClient()` elsewhere. Use `select`/`include`
-  deliberately; **never select or return `passwordHash`**.
+  deliberately.
 
 ### Errors, logging, lifecycle
 
@@ -385,9 +385,8 @@ export function TradesTable({ accountId }: Props) {
 
 - **Frontend:** only `NEXT_PUBLIC_`-prefixed, non-secret values — chiefly `NEXT_PUBLIC_API_URL` (the
   backend origin + `/api`). **Never** put a secret in a `NEXT_PUBLIC_` variable.
-- **Backend (`backend/.env`, never committed):** `DATABASE_URL`, `JWT_ACCESS_SECRET`,
-  `JWT_REFRESH_SECRET`, mail credentials (Gmail SMTP for OTP), `CORS_ORIGIN`. DB credentials and mail
-  secrets are backend-only and never reach the browser.
+- **Backend (`backend/.env`, never committed):** `NODE_ENV`, `DATABASE_URL`, `CORS_ORIGIN`, `PORT` —
+  that's the whole surface. DB credentials are backend-only and never reach the browser.
 - Keep a `.env.example` in each app documenting the required keys (no real values).
 
 ---
