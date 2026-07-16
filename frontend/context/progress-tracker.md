@@ -28,9 +28,17 @@ leaderboard, calendar heatmap, and a filterable trades table.
   global `ThrottlerGuard` + `ResponseInterceptor`; `PrismaService`/`PrismaModule`; a `health` module.
   Env is `NODE_ENV` / `DATABASE_URL` / `CORS_ORIGIN` / `PORT`.
 - **Swagger** — `@nestjs/swagger` serves interactive docs at **`/api/docs`** (spec at
-  `/api/docs-json`); `health` is documented with `@ApiTags`/`@ApiOperation`/`@ApiOkResponse`. This is
-  how endpoints get tested by hand. Verified live: UI 200 + renders, spec valid, `/api/health` returns
-  the wrapped envelope.
+  `/api/docs-json`); every endpoint is documented with `@ApiTags`/`@ApiOperation` and
+  wrapped-envelope response examples. This is how endpoints get tested by hand.
+- **Seeded data** — `npm run seed` loads the reference design's dataset: `Live Account #110920`
+  ($1,000 / USD) + **18 BTCUSD trades** (2026-07-08 → 2026-07-15). Source rows are generated verbatim
+  into `prisma/seed-data.ts`; `prisma/seed.ts` maps and upserts them. Idempotent — re-running leaves
+  1 account / 18 trades.
+- **API endpoints (read-only)** — `GET /api/accounts`, `GET /api/accounts/:id`,
+  `GET /api/trades?accountId=&order=asc|desc`, `GET /api/health`. Trades come back **raw**, ordered by
+  `closedAt`; the client derives every metric. Verified live end to end: 18 trades →
+  **closing balance $1,166.40, win rate 50.00%, profit factor 1.53**; unknown `accountId` → 404;
+  bad `order` → 400; unknown query params stripped by the whitelist.
 - **Schema** — `TradingAccount` + `Trade` (+ `TradeSide` / `TradeStatus` enums), with
   `@@unique([accountId, ticket])` for idempotent CSV re-import and `@@index([accountId, closedAt])`.
 - **Database** — a dedicated **`trade_journal`** PostgreSQL database on `localhost:5432`, with
@@ -42,8 +50,8 @@ leaderboard, calendar heatmap, and a filterable trades table.
 
 - `theme.css` does not yet hold the dark trading tokens, and Inter is not yet the only font — so the
   placeholder pages do not match the design. This is the remaining Phase 0 task.
-- `health` is the only backend feature module — `accounts` and `trades` are not built. The tables
-  exist but nothing reads or writes them yet.
+- The backend is **read-only**: there are no POST/PATCH/DELETE endpoints. Trades enter the system
+  through `npm run seed` only. Trade CRUD and CSV import remain later phases.
 - No `features/` slices exist on the frontend; the whole dashboard cockpit is unbuilt.
 
 **Next:**
@@ -59,7 +67,7 @@ leaderboard, calendar heatmap, and a filterable trades table.
 See build-plan.md for the full per-phase breakdown.
 
 - [~] Phase 0 — Foundation (scaffold + schema done; theme.css/fonts repoint pending)
-- [~] Phase 1 — Trading Accounts (DB + init migration done; `accounts` module + UI not started)
+- [~] Phase 1 — Trading Accounts (DB, seed, and the `accounts` + `trades` GET endpoints done; frontend slice not started)
 - [ ] Phases 2–6 — Trades, Metrics/Overview/Stats, Charts, Filters/Insights/Calendar/Table, Export/Theme
 - [ ] Phase 7 — Polish
 
@@ -73,6 +81,13 @@ See build-plan.md for the full per-phase breakdown.
   to expose publicly as-is.
 - **Schema:** two models — `TradingAccount` + `Trade` (+ `TradeSide`/`TradeStatus` enums), with
   `@@unique([accountId, ticket])` so re-importing a broker CSV is idempotent.
+- **Trade timestamps are anchored to UTC.** The reference dataset carries wall-clock strings with no
+  zone (`"2026-07-15 18:01:35"`). The seed appends `Z` so the stored instant reads back as the same
+  wall clock everywhere, and the frontend reads it with UTC accessors. The dashboard buckets trades by
+  **hour-of-day and weekday**, so parsing in the seeding machine's local zone would shift those
+  buckets for any viewer in another timezone — the same trade would land in a different hour.
+- **The API returns raw trades; an unknown `accountId` is a 404.** Returning an empty list would be
+  indistinguishable from "this account has no trades yet", which hides typos and bad ids.
 - **Dedicated database:** the app owns its own `trade_journal` PostgreSQL database rather than sharing
   a database with any other project on the same server. One project per database keeps migrations,
   resets, and `prisma migrate` drift detection scoped to this app alone — a `migrate reset` here can

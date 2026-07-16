@@ -119,13 +119,14 @@ backend/
     ├── common/          → cross-cutting, domain-agnostic (filters, interceptors). Imports NOTHING from modules/.
     ├── prisma/          → PrismaService + PrismaModule (@Global)
     └── modules/         → one folder per domain
-        ├── accounts/     → trading accounts: CRUD, active account      ← to build
-        ├── trades/       → trades (account-scoped): CRUD + CSV import  ← to build
+        ├── accounts/     → trading accounts: list + get one            ← built (read-only)
+        ├── trades/       → trades (account-scoped): list raw           ← built (read-only)
         └── health/       → health check                                ← built
 ```
 
-**Today `health` is the only feature module** (plus `prisma`, `config`, and the `common` filters +
-response interceptor). `accounts` and `trades` are **still to be built**.
+**All three feature modules exist** (plus `prisma`, `config`, and the `common` filters + response
+interceptor). They are **read-only**: there are no write endpoints. Trades enter the system through
+`prisma/seed.ts` (`npm run seed`); trade CRUD and CSV import are later phases.
 
 The only global guard is **`ThrottlerGuard`** (basic rate limiting), and every route is open.
 

@@ -55,9 +55,18 @@ Items are only ticked when the code actually lands.
       `backend/.env` pointing at it; migration `20260716091717_init` applied, creating
       `trading_accounts` + `trades`, the `TradeSide`/`TradeStatus` enums, and both indexes
       (`@@unique([accountId, ticket])`, `@@index([accountId, closedAt])`).
-- [ ] Backend `accounts` module: CRUD over `TradingAccount`; active account.
-- [ ] Frontend `accounts` slice + `settings` page: create/edit account (label, account number,
-      starting balance, currency); active-account store; sidebar account card wired to the active one.
+- [x] **Seed from the reference design** — `prisma/seed-data.ts` (generated verbatim from
+      `designs/website.index.html`) + `prisma/seed.ts`, run with `npm run seed`. Inserts the
+      `Live Account #110920` ($1,000 / USD) and its **18 BTCUSD trades**. Idempotent via
+      `@@unique([accountId, ticket])` — verified by re-running (still 1 account / 18 trades).
+      Verified in psql: `SUM(netPnl) = 166.40`, 9 wins / 9 losses.
+- [x] **Backend `accounts` module** — `GET /api/accounts` (oldest first), `GET /api/accounts/:id`
+      (404 on unknown id). Swagger-documented with wrapped-envelope examples.
+- [x] **Backend `trades` module** — `GET /api/trades?accountId=&order=asc|desc`, returning **raw**
+      trades ordered by `closedAt` (chronological by default, since running balance is cumulative).
+      An unknown `accountId` returns **404** rather than an empty list. Swagger-documented.
+- [ ] Frontend `accounts` slice: active-account store (auto-select the first account); sidebar
+      account card wired to it. *(No settings page — out of scope for the read-only design.)*
 
 ---
 
@@ -123,7 +132,7 @@ Items are only ticked when the code actually lands.
 | Phase                                   | Status        |
 | --------------------------------------- | ------------- |
 | 0 — Foundation                          | Scaffold + schema done; theme.css/fonts repoint pending |
-| 1 — Trading Accounts                    | DB + init migration done; `accounts` module + UI not started |
+| 1 — Trading Accounts                    | DB, seed, and the `accounts` + `trades` GET endpoints done; frontend slice not started |
 | 2 — Trades                              | Not started   |
 | 3 — Metrics, Overview & Stats           | Not started   |
 | 4 — Charts (Chart.js)                   | Not started   |

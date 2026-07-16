@@ -7,6 +7,8 @@ import configuration from "./config/configuration";
 import { validateEnv } from "./config/env.validation";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import { PrismaModule } from "./prisma/prisma.module";
+import { AccountsModule } from "./modules/accounts/accounts.module";
+import { TradesModule } from "./modules/trades/trades.module";
 import { HealthModule } from "./modules/health/health.module";
 
 @Module({
@@ -18,7 +20,8 @@ import { HealthModule } from "./modules/health/health.module";
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
-    // Feature modules (accounts, trades) are added in their build-plan phases.
+    AccountsModule,
+    TradesModule,
     HealthModule,
   ],
   providers: [
