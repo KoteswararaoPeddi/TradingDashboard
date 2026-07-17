@@ -1,4 +1,4 @@
-import type { DailyPnl } from "../types/metrics.types";
+import type { DailyPnl, MonthlyPnl } from "../types/metrics.types";
 
 /**
  * Month names are a fixed list rather than `Intl.DateTimeFormat`, for the same
@@ -81,15 +81,22 @@ export interface CalendarMonth {
  * the traded ones left into the wrong weekday — and on a calendar the empty days
  * are half the information.
  *
- * P&L is read from the metric bundle's `dailyPnl` rather than re-grouping the
- * trades here. A second grouping would be a second source of the same number,
- * free to drift from the charts by a rounding step.
+ * Both the per-day P&L and the **month's net** are read from the server bundle —
+ * `dailyPnl` for the cells, `monthlyPnl` for the header total — rather than
+ * re-summing here. Those totals are analytics: every client should read one
+ * figure, and a second client-side sum would be free to drift by a rounding step.
+ *
+ * What stays here is presentation only: the grid geometry (which cell, Monday-
+ * start rows, month-boundary padding) and the per-row "Week" subtotal, which is
+ * just the sum of the day cells shown in that layout row — a rendering artifact,
+ * not a domain week.
  *
  * All date maths uses UTC accessors — the whole app buckets by UTC day, so a
  * local-time grid would file trades under different cells than the charts do.
  */
 export function buildCalendarMonths(
   dailyPnl: DailyPnl[],
+  monthlyPnl: MonthlyPnl[],
   range: { from: string; to: string },
 ): CalendarMonth[] {
   if (!range.from || !range.to) return [];
@@ -98,6 +105,9 @@ export function buildCalendarMonths(
   // Per-day trade counts come straight from the server bundle now — no second
   // grouping of the trades on the client, so the count can never drift from P&L.
   const countByDay = new Map(dailyPnl.map((d) => [d.date, d.count]));
+  // The month header's net and traded-day count are server-computed analytics,
+  // looked up by "YYYY-MM" — not re-summed from the cells below them.
+  const monthByKey = new Map(monthlyPnl.map((m) => [m.month, m]));
 
   // One scale for every month in the view, not one per month: per-month scales
   // would paint a $12 day in a quiet month the same green as a $140 day in a
@@ -131,11 +141,15 @@ export function buildCalendarMonths(
 
     const weeks = toWeeks(days, mondayIndex(new Date(Date.UTC(year, month, 1))));
 
+    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const serverMonth = monthByKey.get(monthKey);
+
     months.push({
-      key: `${year}-${String(month + 1).padStart(2, "0")}`,
+      key: monthKey,
       label: `${MONTH_NAMES[month]} ${year}`,
-      net: round2(sum(days.map((d) => d.pnl ?? 0))),
-      tradedDays: days.filter((d) => d.pnl !== null).length,
+      // Net and traded-days are read from the server rollup, not summed here.
+      net: serverMonth?.value ?? 0,
+      tradedDays: serverMonth?.tradedDays ?? 0,
       weeks,
     });
 

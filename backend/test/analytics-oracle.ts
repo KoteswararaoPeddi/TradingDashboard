@@ -34,6 +34,9 @@ const raw: RawTrade[] = DESIGN_TRADES.map((row, i) => ({
   netPnl: row.netPnl,
   closedAt: toUtc(row.date),
   openedAt: toUtc(row.openDate),
+  entryPrice: row.entryPrice,
+  exitPrice: row.exitPrice,
+  size: row.size,
 }));
 
 const start = DESIGN_ACCOUNT.startingBalance;
@@ -67,6 +70,7 @@ check("hour buckets", m.hourlyPnl.length, 24);
 check("weekday total == net", m.weekdayPnl.reduce((a, d) => a + d.value, 0).toFixed(2), "166.40");
 check("hour total == net", m.hourlyPnl.reduce((a, h) => a + h.value, 0).toFixed(2), "166.40");
 check("daily total == net", m.dailyPnl.reduce((a, d) => a + d.value, 0).toFixed(2), "166.40");
+check("monthly total == net", m.monthlyPnl.reduce((a, d) => a + d.value, 0).toFixed(2), "166.40");
 check("asset total == net", m.assets.reduce((a, x) => a + x.pnl, 0).toFixed(2), "166.40");
 check("direction total == net", (m.direction.long + m.direction.short + m.direction.liquidation).toFixed(2), "166.40");
 check("wins+losses+be == total", m.wins + m.losses + m.breakevens, 18);
@@ -130,6 +134,30 @@ const winnerMetrics = calculateAnalytics(winners, start);
 check("winners profitFactor INF", winnerMetrics.profitFactor === null ? "INF" : "n", "INF");
 check("winners win rate", winnerMetrics.winRate.toFixed(2), "100.00");
 check("winners net", winnerMetrics.netProfit.toFixed(2), "481.89");
+
+console.log("\n--- monthly rollup (calendar / MonthNav source) ---");
+// Every seed row closed in July 2026, so the whole account rolls into one month.
+check("monthly buckets", m.monthlyPnl.length, 1);
+check("month key", m.monthlyPnl[0].month, "2026-07");
+check("month net", m.monthlyPnl[0].value.toFixed(2), "166.40");
+check("month trade count", m.monthlyPnl[0].tradeCount, 18);
+check("month traded days == daily", m.monthlyPnl[0].tradedDays, m.dailyPnl.length);
+
+console.log("\n--- row fields (pips / filled size) ---");
+check("all rows carry pips", String(enriched.every((t) => t.pips !== null)), "true");
+check("all rows carry filled size", String(enriched.every((t) => t.filledSize !== null)), "true");
+// "0.01/0.01" → "0.01", "0.25/0.25" → "0.25", "1/1" → "1".
+check("filled size parsed", [...new Set(enriched.map((t) => t.filledSize))].sort().join(","), "0.01,0.25,1");
+const btc = enriched.find((t) => t.trade.entryPrice === 65258.9);
+check("pips == |exit - entry|", btc?.pips?.toFixed(2) ?? "MISSING", "36.52");
+// The strong identity (ported from the retired frontend verify-pips): fees are
+// zero on every seed row, so netPnl is exactly the price move times the filled
+// size. If the subtraction inverts, scales, or drops its sign, this breaks.
+const identityBreaks = enriched.filter((t) => {
+  const implied = (t.pips ?? 0) * Number(t.filledSize ?? 0);
+  return Math.abs(implied - Math.abs(t.trade.netPnl)) > 0.01;
+}).length;
+check("pips x size == |netPnl| (all rows)", identityBreaks, 0);
 
 console.log(failed === 0 ? "\n✅ all checks passed" : `\n❌ ${failed} check(s) failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -99,6 +99,10 @@ export interface EnrichedTrade extends Trade {
   balanceAfter: number;
   /** Human hold time ("34m 12s"), or null when the open time is unknown. */
   holdTime: string | null;
+  /** Raw price distance |exit - entry|, computed server-side; null when a price is missing. */
+  pips: number | null;
+  /** Filled half of the broker's "requested/filled" size, parsed server-side; null when absent. */
+  filledSize: string | null;
 }
 
 /** One page of trades, as returned by GET /api/trades. */

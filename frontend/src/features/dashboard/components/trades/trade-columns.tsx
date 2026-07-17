@@ -2,7 +2,6 @@ import { TableCell, TableHead } from "@components/ui/table";
 import { formatDate, formatMoney, formatPips } from "@lib/format";
 import { cn } from "@lib/utils";
 
-import { filledSize, tradePips } from "../../lib/trade-fields";
 import type { EnrichedTrade, TradeSide } from "../../types/trade.types";
 
 /**
@@ -62,7 +61,6 @@ export function TradeHeadCells({ withActions = false }: CellProps) {
 /** One trade's cells, minus any actions cell the caller appends. */
 export function TradeRowCells({ trade, withActions = false }: CellProps & { trade: EnrichedTrade }) {
   const up = trade.netPnl >= 0;
-  const pips = tradePips(trade);
 
   return (
     <>
@@ -95,13 +93,14 @@ export function TradeRowCells({ trade, withActions = false }: CellProps & { trad
       {/* A distance, so it takes no sign and no tone: the Type and P&L columns
           either side already say which way it went and what it earned. */}
       <TableCell className="text-right text-muted-foreground tabular-nums">
-        {pips === null ? "—" : formatPips(pips)}
+        {trade.pips === null ? "—" : formatPips(trade.pips)}
       </TableCell>
 
       {/* The filled half of the broker's "requested/filled" pair — the size that
-          actually traded, and the one the row's P&L is computed from. */}
+          actually traded, and the one the row's P&L is computed from. Parsed
+          server-side now, so the row just renders it. */}
       <TableCell className="text-right text-muted-foreground tabular-nums">
-        {filledSize(trade.size) ?? "—"}
+        {trade.filledSize ?? "—"}
       </TableCell>
 
       <TableCell className={cn("text-right font-bold tabular-nums", up ? "text-up" : "text-down")}>

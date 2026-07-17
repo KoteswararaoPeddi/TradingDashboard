@@ -38,7 +38,7 @@ export function CalendarHeatmap() {
   const todayKey = useTodayKey();
 
   const months = useMemo(
-    () => (metrics ? buildCalendarMonths(metrics.dailyPnl, range) : []),
+    () => (metrics ? buildCalendarMonths(metrics.dailyPnl, metrics.monthlyPnl, range) : []),
     [metrics, range],
   );
 

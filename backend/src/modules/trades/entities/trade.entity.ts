@@ -90,6 +90,18 @@ export class TradeRowEntity extends TradeEntity {
 
   @ApiPropertyOptional({ example: "34m 12s", description: "Hold time, or null if open time unknown." })
   holdTime!: string | null;
+
+  @ApiPropertyOptional({
+    example: 36.52,
+    description: "Raw price distance |exit - entry|, or null when a price is unknown.",
+  })
+  pips!: number | null;
+
+  @ApiPropertyOptional({
+    example: "0.25",
+    description: 'Filled half of the broker\'s "requested/filled" size, or null.',
+  })
+  filledSize!: string | null;
 }
 
 /** One page of trades. Becomes the `data` of the GET /trades envelope. */

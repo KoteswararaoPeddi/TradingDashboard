@@ -400,6 +400,32 @@ See build-plan.md for the full per-phase breakdown.
   `toNumber`/`toNullableNumber` normalise every money field on the way out of the DB (entities +
   analytics/trades services). **Open:** `schema.prisma` and the generated client disagree — the user
   needs to reconcile (regenerate to `Decimal @db.Decimal(18,2)` or revert the migration).
+- **Closed the last client-side calculations: pips, filled size, monthly totals** *(2026-07-17)*.
+  Follow-up to the analytics move. Three derivations still ran in React: the calendar's daily→monthly
+  totals, per-row `pips` (`|exit − entry|`), and `filledSize` (parse `"0.25/0.25"` → `"0.25"`). Moved
+  to the backend — `trades.logic.enrichTrades` now derives `pips`/`filledSize` and exposes them on
+  `TradeRowEntity`; `analytics.calculator` emits `monthlyPnl[]` (`{month, value, tradedDays,
+  tradeCount}`), rolled up from the already-rounded `dailyPnl` so it can't drift. Frontend
+  `lib/trade-fields.ts` and `scripts/verify-pips.ts` were **deleted** (its strong `pips × size ==
+  |netPnl|` identity was ported into the oracle first, so no coverage was lost); `trade-columns.tsx`
+  reads `trade.pips`/`trade.filledSize`; `calendar.ts` reads month net from `monthlyPnl`. **Kept on
+  the client on purpose** (a design decision, confirmed with the owner): the heatmap **tint**
+  (value→colour) and the calendar's per-row **"Week" subtotal** — a Monday-start, month-clipped grid
+  row is a layout artifact, not a domain week, so its sum stays a presentation rollup of already-fetched
+  daily data. Rule applied: *must be correct on every client → backend; only helps render one layout →
+  frontend*. Oracle extended (monthly rollup + pips/filledSize + identity) — all green, live-confirmed.
+  See engineering/backend.md → "Draw the client/server line…".
+
+- **Fixed: "Time period" chip flashed "Today" then swapped to "All time" on every load** *(2026-07-17)*.
+  The zustand store starts with an empty range (`{"", ""}`); the real span is seeded a beat later in a
+  `useCockpit` effect (`initRange`). On the un-seeded first frame, `periodRange` collapses every period
+  to `{"", ""}`, so all of them matched the (also-empty) filters and `activePeriod`'s `.find()` returned
+  the array's first entry — which was `"today"`. Once the range seeded, only `all` matched → a visible
+  Today→All-time flip. Root cause was an ordering bug: `activePeriod` was documented as testing `all`
+  "before the fixed windows" but the array was `["today", "all", "7d", "30d"]`. Reordered to
+  `["all", "today", "7d", "30d"]` (`lib/filters.ts`) so the un-seeded frame already resolves to the chip
+  it settles on — no flip. Per-click behaviour (Today / 7d / 30d) is unchanged; only the ambiguous
+  all-covering and un-seeded cases now prefer "All time".
 
 ---
 

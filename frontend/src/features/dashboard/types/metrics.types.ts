@@ -14,6 +14,17 @@ export interface DailyPnl {
   count: number;
 }
 
+/** Net P&L for one calendar month (UTC), computed server-side. */
+export interface MonthlyPnl {
+  /** "YYYY-MM" */
+  month: string;
+  value: number;
+  /** Distinct days in the month with at least one trade. */
+  tradedDays: number;
+  /** Trades closed in the month. */
+  tradeCount: number;
+}
+
 /** Net P&L for one weekday. */
 export interface WeekdayPnl {
   /** "Sun" … "Sat" */
@@ -118,6 +129,8 @@ export interface TradeMetrics {
   // Series
   equityCurve: EquityPoint[];
   dailyPnl: DailyPnl[];
+  /** Per-month rollup of dailyPnl — the calendar's MonthNav net reads this. */
+  monthlyPnl: MonthlyPnl[];
   weekdayPnl: WeekdayPnl[];
   hourlyPnl: HourlyPnl[];
   /** Sorted by net P&L, best first. */

@@ -11,7 +11,13 @@ import { TradeSide } from "@prisma/client";
  * test/analytics-oracle.ts.
  */
 
-/** The minimum a raw trade must carry for enrichment. Matches the Prisma row. */
+/**
+ * The minimum a raw trade must carry for enrichment. Matches the Prisma row.
+ *
+ * `entryPrice`/`exitPrice`/`size` are optional because the analytics oracle
+ * feeds a trimmed fixture that only carries P&L — they exist here so the same
+ * enrichment can derive the row-level `pips` and `filledSize` the table shows.
+ */
 export interface RawTrade {
   id: string;
   symbol: string;
@@ -19,6 +25,9 @@ export interface RawTrade {
   netPnl: number;
   closedAt: Date;
   openedAt: Date | null;
+  entryPrice?: number | null;
+  exitPrice?: number | null;
+  size?: string | null;
 }
 
 /** A trade plus the values derived once across the account's full history. */
@@ -38,6 +47,10 @@ export interface EnrichedTrade<T extends RawTrade = RawTrade> {
   dayKey: string;
   /** Human hold time ("34m 12s"), or null when the open time is unknown. */
   holdTime: string | null;
+  /** Raw price distance |exit - entry|, or null when either price is unknown. */
+  pips: number | null;
+  /** The filled half of the broker's "requested/filled" size, or null. */
+  filledSize: string | null;
 }
 
 export type DirectionFilter = "ALL" | "LONG" | "SHORT" | "LIQUIDATION";
@@ -70,6 +83,39 @@ function utcDayKey(date: Date): string {
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
   const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+/**
+ * How far price travelled between entry and exit, as a raw distance.
+ *
+ * Unsigned and unscaled: BTCUSD 65258.90 → 65295.42 is 36.52. Direction and
+ * outcome already have their own columns, so a sign here would only restate them,
+ * and leaving it unscaled keeps the figure tied to the Entry/Exit columns by
+ * subtraction. Null (never 0) when a price is missing — an untravelled distance is
+ * unknown, not zero.
+ *
+ * This is the single home for the pip figure now: instrument-aware conventions
+ * (forex 0.0001 vs JPY 0.01 vs metals/indices/crypto ticks) belong here too, once
+ * the schema carries per-symbol pip sizes. Today it is the raw distance the UI
+ * already showed, moved server-side so every client reads one definition.
+ */
+function tradePips(entryPrice?: number | null, exitPrice?: number | null): number | null {
+  if (entryPrice == null || exitPrice == null) return null;
+  return Math.abs(exitPrice - entryPrice);
+}
+
+/**
+ * The size that actually traded, from a broker's "requested/filled" pair.
+ *
+ * The raw field is a string like "0.25/0.25" — what was asked for, then what was
+ * filled. Only the filled half is real: on a partial fill the two differ, and P&L
+ * is computed off the fill, so showing anything else would print a number the
+ * money disagrees with. Tolerates a plain "1" (hand-entered trades carry no pair).
+ */
+function parseFilledSize(size?: string | null): string | null {
+  if (!size) return null;
+  const filled = size.includes("/") ? size.slice(size.lastIndexOf("/") + 1) : size;
+  return filled.trim() || null;
 }
 
 /** "34m 12s" from open→close, or null when the open time is unknown. */
@@ -109,6 +155,8 @@ export function enrichTrades<T extends RawTrade>(
       weekday: closed.getUTCDay(),
       dayKey: utcDayKey(closed),
       holdTime: formatHoldTime(trade.openedAt, closed),
+      pips: tradePips(trade.entryPrice, trade.exitPrice),
+      filledSize: parseFilledSize(trade.size),
     };
   });
 }

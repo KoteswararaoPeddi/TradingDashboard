@@ -93,8 +93,18 @@ Trade           id, accountId, symbol, side (TradeSide), size,
 framework-free calculator lives in the backend (`modules/analytics/analytics.calculator.ts` +
 `modules/trades/trades.logic.ts`); it takes the filtered, enriched trade set and returns the full
 bundle (totals, win rate, gross/net, profit factor, best/worst, long/short splits, streaks, max
-drawdown, equity curve, weekday/hour/daily aggregates, per-asset rollups, best/worst hour & weekday).
-`GET /api/analytics?<filters>` returns it ready-to-render; the frontend performs **no calculation**.
+drawdown, equity curve, weekday/hour/daily **and monthly** aggregates, per-asset rollups, best/worst
+hour & weekday). Per-row derivations belong to the server too: each trade row carries `pips`
+(`|exit − entry|`) and `filledSize` (the filled half of the broker's `"req/fill"` pair), derived in
+`trades.logic.enrichTrades`. `GET /api/analytics?<filters>` returns the bundle ready-to-render; the
+frontend performs **no domain calculation**.
+
+- **The client/server line is "must be correct everywhere" vs "only helps render."** Every P&L total
+  and per-row figure is server-computed; the two things left on the client are *presentation only*: the
+  calendar heatmap **tint** (maps a raw `value` → colour/alpha) and the calendar's per-row **"Week"
+  subtotal** (a Monday-start, month-clipped grid row is a layout artifact, not a domain week, so its
+  sum is a display rollup of already-fetched `dailyPnl`). The API never ships colours/opacities/widths.
+  See engineering/backend.md → "Draw the client/server line…".
 
 - **Filtering + sorting happen server-side**, driven by the same filter query params on both
   `GET /analytics` and `GET /trades`. The client only translates filter chips → query params
@@ -104,8 +114,9 @@ drawdown, equity curve, weekday/hour/daily aggregates, per-asset rollups, best/w
   over the *whole* filtered set (not a page).
 - **First paint** is server-rendered (loader fetches the unfiltered bundle + first page); each filter
   change triggers a client refetch, previous numbers dimmed until the new ones arrive.
-- Correctness is pinned by the backend oracle `backend/test/analytics-oracle.ts` (43 checks against
-  the reference design — $1,166.40 / 50% / 1.53). `tsc`/`build` cannot catch a wrong formula; this can.
+- Correctness is pinned by the backend oracle `backend/test/analytics-oracle.ts` (~55 checks against
+  the reference design — $1,166.40 / 50% / 1.53, plus the monthly rollup, pips, filled size and the
+  `pips × size == |netPnl|` identity). `tsc`/`build` cannot catch a wrong formula; this can.
 
 ---
 

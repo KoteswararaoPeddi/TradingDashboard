@@ -25,6 +25,16 @@ export interface WeekdayPnl {
   day: string;
   value: number;
 }
+export interface MonthlyPnl {
+  /** "2026-07" — the UTC calendar month. */
+  month: string;
+  /** Net P&L across the month's trades. */
+  value: number;
+  /** Distinct days in the month that had at least one trade. */
+  tradedDays: number;
+  /** Trades closed in the month. */
+  tradeCount: number;
+}
 export interface HourlyPnl {
   hour: number;
   label: string;
@@ -86,6 +96,7 @@ export interface TradeAnalytics {
   maxConsecutiveLosses: number;
   equityCurve: EquityPoint[];
   dailyPnl: DailyPnl[];
+  monthlyPnl: MonthlyPnl[];
   weekdayPnl: WeekdayPnl[];
   hourlyPnl: HourlyPnl[];
   assets: AssetRollup[];
@@ -242,6 +253,28 @@ export function calculateAnalytics<T extends RawTrade>(
     .map(([date, d]) => ({ date, value: round2(d.value), count: d.count }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Months roll up from the *rounded* daily figures, not a second pass over the
+  // trades: a separate sum would be free to drift from the calendar's day cells
+  // by a rounding step. tradedDays counts distinct active days; tradeCount is the
+  // trades. The calendar and MonthNav read these instead of re-summing on the client.
+  const monthlyTotals = new Map<string, { value: number; tradedDays: number; tradeCount: number }>();
+  for (const day of dailyPnl) {
+    const month = day.date.slice(0, 7);
+    const bucket = monthlyTotals.get(month) ?? { value: 0, tradedDays: 0, tradeCount: 0 };
+    bucket.value += day.value;
+    bucket.tradedDays += 1;
+    bucket.tradeCount += day.count;
+    monthlyTotals.set(month, bucket);
+  }
+  const monthlyPnl: MonthlyPnl[] = [...monthlyTotals.entries()]
+    .map(([month, m]) => ({
+      month,
+      value: round2(m.value),
+      tradedDays: m.tradedDays,
+      tradeCount: m.tradeCount,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
   const weekdayPnl: WeekdayPnl[] = weekdayTotals.map((value, i) => ({
     day: DAY_NAMES[i],
     value: round2(value),
@@ -291,6 +324,7 @@ export function calculateAnalytics<T extends RawTrade>(
     maxConsecutiveLosses,
     equityCurve,
     dailyPnl,
+    monthlyPnl,
     weekdayPnl,
     hourlyPnl,
     assets,

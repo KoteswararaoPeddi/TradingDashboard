@@ -202,3 +202,53 @@ mappers and the analytics/trades services). One calculation path, robust to eith
 
 4. **Rule of thumb** — Decide a value's representation once, at the boundary it enters your system;
    never let a DB/serialization type leak into business arithmetic.
+
+---
+
+## Draw the client/server line by "must be correct" vs "only helps render" *(2026-07-17)*
+
+**What / Where / Why.** After the analytics move, three small computations still lived on the client:
+the calendar's daily→monthly totals, per-row `pips` (`|exit − entry|`), and `filledSize` (parse
+`"0.25/0.25"` → `"0.25"`). We moved **pips**, **filledSize**, and **monthly totals** to the backend
+(`trades.logic.enrichTrades` exposes `pips`/`filledSize` on `TradeRowEntity`; `analytics.calculator`
+emits `monthlyPnl[]`), but deliberately **kept** two things on the client: the heatmap **tint** (map a
+raw `value` → colour/alpha) and the calendar's per-row **"Week" subtotal**. The test isn't "is it
+arithmetic" — it's *"must this value be correct and identical on every client, or does it only exist to
+render this one layout?"*
+
+**Learn block**
+
+1. **Vocabulary** — *Domain aggregate*: a total with meaning independent of any screen (a month's net
+   P&L). *Presentation rollup*: a number that only exists because of how one UI arranges things (the
+   sum of the day-cells in a Monday-start, month-clipped calendar row — not a real ISO week).
+
+2. **❌ naive vs ✅ our real code**
+   ```ts
+   // ❌ naive — one blanket rule: "no math on the frontend", so the API ships pixels
+   { date: "2026-07-17", netPnl: 420, backgroundColor: "#00b894", opacity: 0.67, cellWidth: 28 }
+
+   // ✅ ours — backend owns the domain totals; the client owns the pixels
+   // server: raw, reusable numbers
+   monthlyPnl: [{ month: "2026-07", value: 166.4, tradedDays: 5, tradeCount: 18 }]
+   dailyPnl:   [{ date: "2026-07-11", value: -62.42, count: 4 }]
+   // client (DayCell.tsx): decides how -62.42 becomes a colour
+   backgroundColor: `color-mix(in oklab, var(--color-down) ${tintPercent(strength)}%, transparent)`
+   ```
+
+3. **Plain-english why** — Baking colour/opacity/width into the API couples it to today's design: a
+   restyle or a second client (mobile) would need an API change to recolour a cell. Conversely, letting
+   each client re-sum a month invites drift — web rounds one way, mobile another, and the two disagree
+   on the headline number. So the rule cuts both ways: **totals up** (to the server, computed once),
+   **pixels down** (to the client, free to restyle). The month-grid *week* row is the edge case — its
+   subtotal is "sum the cells this layout happens to show," which has no meaning off this grid, so it
+   stays a client rollup of already-fetched daily data.
+
+4. **Where else you'd use this**
+   - A dashboard API returning `status: "healthy"` (domain) but not `badgeColor: "green"` (presentation).
+   - Search returning relevance *scores* (server) while the client picks how many stars that is.
+   - A report endpoint giving subtotals/grand-totals (server) but not column widths or page breaks.
+   - i18n: server sends a number + currency code; the client formats `1234.5 → "$1,234.50"`.
+
+5. **Rule of thumb** — If a second client would need the same number, compute it server-side; if a
+   restyle would change it, leave it on the client. "Must be correct everywhere" → backend; "only helps
+   render" → frontend. Never ship colours, widths, or opacities from the API.

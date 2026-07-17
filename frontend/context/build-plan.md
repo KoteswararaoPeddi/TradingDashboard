@@ -227,16 +227,17 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
         returning to page 1. **On the real 19-trade journal it is a single page, so no page buttons
         render** (as `Load more` never did at STEP 24).
   - [x] **Pips column** *(2026-07-17, beyond plan)* — added after Exit in the shared
-        `trade-columns.tsx`, so **both** tables carry it. Raw `|exit - entry|` from
-        `lib/trade-fields.ts`: unscaled, unsigned, untinted, `—` on a missing fill. Table min-width
-        `min-w-200` → `min-w-220` for the 9th column.
-  - [x] **Size shows one value** *(2026-07-17, beyond plan)* — `filledSize()` renders the filled half
-        of the broker's `"requested/filled"` pair (`0.25/0.25` → `0.25`), which is the size P&L is
-        computed from.
-  - **Verified (both):** `scripts/verify-pips.ts` — 25 checks, incl. the identity
-        `pips x filledSize == |netPnl|` across all 18 seed rows (fees are zero, so it must hold and
-        breaks instantly on any inversion or scaling) — plus every rendered row re-derived from the
-        DOM's own Entry/Exit text, and no `/` left in any Size cell.
+        `trade-columns.tsx`, so **both** tables carry it. Raw `|exit - entry|`: unscaled, unsigned,
+        untinted, `—` on a missing fill. Table min-width `min-w-200` → `min-w-220` for the 9th column.
+        **Moved server-side** *(2026-07-17)* — now `TradeRowEntity.pips` from `trades.logic`; the cell
+        just renders `trade.pips`.
+  - [x] **Size shows one value** *(2026-07-17, beyond plan)* — renders the filled half of the broker's
+        `"requested/filled"` pair (`0.25/0.25` → `0.25`), the size P&L is computed from. **Moved
+        server-side** *(2026-07-17)* — now `TradeRowEntity.filledSize`; the cell renders `trade.filledSize`.
+  - **Verified (both):** the `pips × filledSize == |netPnl|` identity (fees are zero on every seed row,
+        so it must hold and breaks instantly on any inversion or scaling) now lives in the backend
+        oracle `test/analytics-oracle.ts`, ported when `lib/trade-fields.ts` + `scripts/verify-pips.ts`
+        were retired — coverage moved with the code.
 
 ---
 
@@ -282,5 +283,13 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
   `useTrades` fetch from the API. Backend calculator is a verbatim port of the old `metrics.ts`, pinned
   by `backend/test/analytics-oracle.ts` (43 checks, green live). Supersedes Phase 3's "metrics module"
   (client) and the architecture note that a server analytics endpoint was "optional".
+- **[x] Closed the last client calculations (pips, filled size, monthly totals)** *(2026-07-17)* —
+  follow-up to the migration above. `pips` + `filledSize` now derived in `trades.logic.enrichTrades`
+  and carried on `TradeRowEntity`; `analytics.calculator` emits `monthlyPnl[]`; the calendar reads month
+  net from it. Frontend `lib/trade-fields.ts` + `scripts/verify-pips.ts` deleted (identity ported to the
+  oracle first). **Kept client-side by design** (owner-confirmed): heatmap tint + the calendar's per-row
+  "Week" subtotal (a grid-row is a layout artifact, not a domain week). Oracle now ~55 checks, green +
+  live-confirmed. Supersedes the two Phase 5 entries below ("Pips column" / "Size shows one value"),
+  which described the same figures when they were computed on the client.
 - **[~] Money Float→Decimal** — Prisma client is `Decimal`, `schema.prisma` still `Float`; coerced at
   the DB boundary (`common/money.ts`). **Open:** reconcile schema vs client (owner decision).

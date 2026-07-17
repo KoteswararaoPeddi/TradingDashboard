@@ -42,6 +42,8 @@ export class TradesService {
       index: entry.index,
       balanceAfter: entry.balanceAfter,
       holdTime: entry.holdTime,
+      pips: entry.pips,
+      filledSize: entry.filledSize,
     }));
 
     return {

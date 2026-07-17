@@ -108,7 +108,7 @@ ledger) and `overview/RecentTrades` (the dashboard glance).
 | Head cell | `text-label-sm font-semibold tracking-wider text-subtle-foreground uppercase` |
 | Open / close | two lines: `closedAt` via `formatDate` (DD-MM-YYYY) over `open → close · holdTime` in `text-subtle-foreground` |
 | Type | `font-semibold` + `SIDE_CLASS` — LONG `text-up` / SHORT `text-info` / LIQUIDATION `text-down` |
-| Entry / Exit / Pips / Size | `text-right text-muted-foreground tabular-nums`, `—` when null. Pips + Size come from `lib/trade-fields.ts` |
+| Entry / Exit / Pips / Size | `text-right text-muted-foreground tabular-nums`, `—` when null. Pips + Size are **server-computed** — the cell renders `trade.pips` / `trade.filledSize` (no client derivation) |
 | P&L | `text-right font-bold tabular-nums` + signed `text-up`/`text-down`, explicit `+` prefix |
 | Balance | `text-right text-muted-foreground tabular-nums` |
 | Row | `border-border hover:bg-surface-wash` (ledger adds `group` for hover actions) |
@@ -124,18 +124,22 @@ ledger) and `overview/RecentTrades` (the dashboard glance).
 - **Entry/Exit are prices, not money** — rendered raw with `—` when null, so a missing fill never
   reads as a real `$0.00` trade.
 - **Size shows the filled half only** *(2026-07-17)*. The raw field is a broker `"requested/filled"`
-  pair (`"0.25/0.25"`); `filledSize()` renders `0.25`. Only the filled figure is real — on a partial
-  fill the two differ, and the requested one describes an intention, not a position. It is also the
-  size the row's **P&L is computed from**, so showing the pair (or the requested half) would print a
-  number the money on the row disagrees with. Tolerates a plain `"1"` from hand-entered trades.
-- **Pips is a raw distance: unscaled, unsigned, untinted** *(2026-07-17)*. `Math.abs(exit - entry)`
-  from `lib/trade-fields.ts`, to 1dp via `formatPips`. **No pip-size conversion and no currency**, so the
-  figure ties back to the Entry and Exit columns by plain subtraction and a reader can check it by
-  eye. **No `+`/`-` and no colour**: it is a distance, and Type and P&L either side already say which
-  way it went and what it earned — a sign here would only restate them. Dropping the sign also means
-  direction never enters the maths, so a `LIQUIDATION` (whose side records no direction) still gets a
-  real number. `—` when either fill is missing — null, never `0.0`, because an unrecorded fill did
-  not travel zero pips.
+  pair (`"0.25/0.25"`) → the filled half `0.25`. Only the filled figure is real — on a partial fill
+  the two differ, and the requested one describes an intention, not a position. It is also the size the
+  row's **P&L is computed from**, so showing the pair (or the requested half) would print a number the
+  money on the row disagrees with. Tolerates a plain `"1"` from hand-entered trades. **Parsed
+  server-side** *(2026-07-17)* — `trades.logic` returns `filledSize`; the cell just renders it.
+- **Pips is a raw distance: unscaled, unsigned, untinted** *(2026-07-17)*. `|exit − entry|`, to 1dp
+  via `formatPips`. **No pip-size conversion and no currency**, so the figure ties back to the Entry and
+  Exit columns by plain subtraction and a reader can check it by eye. **No `+`/`-` and no colour**: it
+  is a distance, and Type and P&L either side already say which way it went and what it earned — a sign
+  here would only restate them. Dropping the sign also means direction never enters the maths, so a
+  `LIQUIDATION` (whose side records no direction) still gets a real number. `—` when either fill is
+  missing — null, never `0.0`, because an unrecorded fill did not travel zero pips. **Computed
+  server-side** *(2026-07-17)* — `trades.logic` returns `pips`; the cell renders `trade.pips`. This is
+  now the one home for the figure, so instrument-aware pip conventions (forex `0.0001` vs JPY `0.01` vs
+  metals/crypto ticks) land here once the schema carries per-symbol pip sizes; today it is still the
+  raw distance the UI always showed.
 - The glance carries **no actions**: editing belongs on `/trades`, where you went to manage trades.
 
 ---
@@ -501,6 +505,14 @@ Pure builder in `lib/calendar.ts`; the hydration-safe clock in `hooks/useTodayKe
 **Structure: month → weeks → days.** Not a flat day list. The week is a real row object carrying its
 own net and traded-day count, because the weekly column cannot be derived at render time from cells
 that do not know which row they are in.
+
+**Where the numbers come from** *(2026-07-17)*: `buildCalendarMonths(dailyPnl, monthlyPnl, range)`.
+Day cells read `dailyPnl` (server); the **month header net + traded-days read `monthlyPnl`** (server) —
+`MonthNav` no longer sums the cells. What stays a client rollup by design (owner-confirmed) is the
+per-row **Week** subtotal: a Monday-start, month-clipped grid row is a layout artifact with no meaning
+off this grid, so `WeekCell` sums the day cells shown in its row. Rule: totals that must be correct
+everywhere → server; sums that only describe this layout → client. The **tint** is also client
+(value→alpha) — the API ships raw `value`, never a colour.
 
 | Property | Class |
 | -------- | ----- |

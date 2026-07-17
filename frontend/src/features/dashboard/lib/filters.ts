@@ -33,17 +33,23 @@ export function periodRange(period: Period, range: { from: string; to: string })
 /**
  * Which period chip the current dates correspond to, or null for a custom span.
  *
- * `all` is tested **before** the fixed windows, and the order is load-bearing.
- * Windows clamp to the account's own history, so on a journal spanning 8 days the
- * 30-day window *is* the full range and both chips match the same dates. When a
- * window covers everything there is, "All time" is the honest label — reporting
- * "30 days" would imply a boundary the data does not have.
+ * `all` is tested **before** every fixed window, and the order is load-bearing in
+ * two ways:
+ *  - Windows clamp to the account's own history, so on a journal spanning 8 days
+ *    the 30-day window *is* the full range and both chips match the same dates.
+ *    When a window covers everything there is, "All time" is the honest label —
+ *    reporting "30 days" would imply a boundary the data does not have.
+ *  - Before the range is seeded (`range` is `{"", ""}`, the store's initial state
+ *    on first paint), `periodRange` collapses *every* period to `{"", ""}`, which
+ *    also equals the un-seeded filters. Testing `all` first means the un-seeded
+ *    frame highlights "All time" — the same chip it settles on once the range
+ *    loads — instead of flashing "Today" (the previous first entry) then swapping.
  */
 export function activePeriod(
   filters: TradeFilters,
   range: { from: string; to: string },
 ): Period | null {
-  const periods: Period[] = ["today", "all", "7d", "30d"];
+  const periods: Period[] = ["all", "today", "7d", "30d"];
   return (
     periods.find((period) => {
       const { from, to } = periodRange(period, range);
