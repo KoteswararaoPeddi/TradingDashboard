@@ -47,7 +47,8 @@ Items are only ticked when the code actually lands.
       (`--primary`/`--info`/`--tertiary`, `--up`/`--down`, surfaces, borders, 8px `--radius`,
       `--sidebar-width`), and `@theme inline` bridging to utilities. Accent themes
       (`body[data-accent="violet"|"gold"]`) swap only the accent trio. All 8 legacy palettes removed.
-      The app background grid lives in `globals.css`, also token-driven.
+      The app background wash lives in `globals.css`, also token-driven (its 42px grid was removed
+      2026-07-17).
 - [x] **Fonts → Inter only** — `next/font/google` wired to `--font-sans` (weights 400-900 for the
       heavy numerics); no display or serif font.
 - [x] **`<html class="dark">`** — static, not a toggle. `:root` already holds the dark values; the
@@ -78,15 +79,26 @@ Items are only ticked when the code actually lands.
       active account + trades **once**; the sidebar card renders full-set metrics.
       **Verified in a real browser:** balance $1,166.40 (green), net $166.40, growth 16.64%,
       win rate 50.00%, 18 trades; zero console errors; sidebar 286px; h1 900/56px; Inter;
-      `--up`/`--down` resolve and paint. *(No settings page — out of scope for the read-only design.)*
+      `--up`/`--down` resolve and paint. *(Superseded in Phase 2: a settings page now exists, because
+      the seed became opt-in and the starting balance needs a home in the UI.)*
 
 ---
 
 ## Phase 2 — Trades
 
-- [ ] Backend `trades` module (account-scoped): CRUD; **CSV import** (validate rows, dedupe on
+- [~] Backend `trades` module (account-scoped): **CRUD done** — `POST/PATCH/DELETE /api/trades`,
+      `CreateTradeDto`/`UpdateTradeDto` (class-validator), P2002 → 409 and unknown account → 404 via
+      the existing filters. `accountId` is **optional**: the service resolves the singleton account,
+      so the client never handles an id. **CSV import not started** (validate rows, dedupe on
       `ticket` via `@@unique([accountId, ticket])`, idempotent).
-- [ ] Frontend `trades.service` + add/edit/delete trade forms (RHF + Zod) + CSV import; confirm-before-delete.
+- [~] Frontend `trades.service` + **add/edit/delete trade forms done** (`TradeFormDialog`, RHF + Zod
+      mirroring the DTO) + confirm-before-delete via the `confirm()` store; two empty states
+      (no trades at all vs. no filter matches). **CSV import not started.**
+- [x] Settings page (`/settings`) — edits `startingBalance`/`currency` via `PATCH /api/accounts/:id`.
+      Added beyond the original plan: the seed is now opt-in, so the starting balance the equity curve
+      is measured from needs a home in the UI. Supersedes the "no settings page" note in Phase 1.
+- [x] Seed made **opt-in** — `prisma.seed` hook removed from `backend/package.json`; `npm run seed`
+      still loads the reference dataset on demand.
 
 ---
 
@@ -121,25 +133,102 @@ Items are only ticked when the code actually lands.
 
 ## Phase 4 — Charts (recharts)
 
-- [ ] `shared/config/chart-theme.ts` — token-driven defaults (grid stroke, tick fill, tooltip
+- [x] `shared/config/chart-theme.ts` — token-driven defaults (grid stroke, tick fill, tooltip
       surface, money formatter) so all seven charts read one source.
-- [ ] Seven charts, each `"use client"` + dynamic-imported (`ssr:false`) inside a fixed-height Panel
+- [x] Seven charts, each `"use client"` + dynamic-imported (`ssr:false`) inside a fixed-height Panel
       body (`ResponsiveContainer` collapses to zero in an auto-height box): equity curve
       (`AreaChart` + gradient), daily / weekday / hourly P&L (`BarChart` + per-bar `<Cell>` for signed
       colour), asset performance (`BarChart layout="vertical"`), long-vs-short (`BarChart`), win/loss
       (`PieChart` + `innerRadius` donut). Colours are `var(--color-*)` — no JS palette copy.
+      **Verified in a browser:** all seven render, 10 recharts surfaces, zero console errors.
+- [~] **Known chart defects, not yet fixed:**
+  - Equity curve Y axis anchors at `0` (recharts' `YAxis` default is `[0, dataMax]`), so a
+    $900–$1,200 history renders as a flat line in the top fifth of the panel. The reference design's
+    Chart.js scale auto-fits; ours does not. Needs `domain={["auto","auto"]}`.
+  - The compact money formatter renders **two identical `$1.1K` ticks** (1,050 and 1,100 both round
+    to one significant decimal). Axis ticks must be distinct.
+  - Asset Performance degenerates to one giant block on a single-symbol account; Long vs Short
+    reserves an empty Liquidation category; the Win/Loss donut legend lists Breakeven at zero.
+
+---
+
+## Phase 4.5 — Multi-page redesign *(inserted; not in the original plan)*
+
+The cockpit moved from **one long anchored page** to **four routes**, and the Overview was redesigned
+around the daily 30-second check. See "Beyond-plan work" below for the full record.
+
+- [x] `shared/constants/routes.ts` + `shared/config/app-nav.config.ts` — one source for destinations,
+      driving the sidebar nav **and** the topbar title/subline.
+- [x] `MainNav` (route nav, `usePathname`, `aria-current="page"`) replaces `SectionNav`; the
+      `IntersectionObserver` and `constants/sections.ts` are deleted.
+- [x] Routes `/dashboard`, `/analytics`, `/trades`, `/calendar` + their thin page entries.
+- [x] Overview redesigned: `AccountHero` (balance + signed delta) over a 6-cell `AccountStrip`;
+      `MarketBoard` removed; the panel's two-column void removed by construction.
+- [x] Topbar title demoted from a 56px account name to a page label at `h2`.
+- [x] **Redesigned against the reference builds** (`context/designs/app.tradefxbook.com_*.png`):
+      lucide icons + tinted active pill in the nav (replacing `01`/`02` markers); `Tile` rebuilt with
+      an optional tinted icon plate and the accent bar removed; `AccountStrip`'s six hairline cells
+      replaced by `KpiRow`'s four icon cards; `EquitySpark` beside the balance; `RecentTrades` on the
+      glance (shadcn `Table`); account card moved from the sidebar's bottom to under the brand.
+- [~] **Token rebuild — partial.** `--radius` 8px → 12px landed (whole derived family moved with it).
+      **The type-scale and elevation edits did not persist** — `theme.css` still holds the original
+      52/48/35/29 scale and the single `0 18px 45px` shadow. Both remain open:
+  - Type scale has unusable steps: `display-xl` (48) sits 4px under `display-2xl` (52), and
+    `h5`/`label-lg`/`body-base` are all 14px.
+  - One shadow serves panels, cards, dialogs and toasts alike, so a resting panel and a modal claim
+    the same elevation.
+- [x] **Filters as a persistent control** — `FilterChips` (time period × result, two orthogonal axes)
+      renders on Analytics, Trades and Calendar. New pure helpers `periodRange` / `activePeriod` /
+      `activeResult` in `lib/filters.ts`. **Verified in a browser:** 18 → Winners 9 → +7 days 4, both
+      chips still active; `verify-metrics.ts` still green.
+- [x] **`/analytics` reference pass** — `AnalyticsKpis` (4 icon cards: Total P&L, Win Rate, Profit
+      Factor, Expectancy) leads the page so the 27-card grid reads as detail rather than 27 equal
+      facts. Page order is scope → headline → detail.
+- [x] **`/trades` reference pass** — `TradesTable`: 8 columns (Open/close, Symbol, Type, Entry, Exit,
+      Size, P&L, Balance), `tabular-nums`, hover rows, signed P&L + running balance, **Load more**
+      (24-row step), live count, and an empty state carrying `Clear filters`.
+- [~] Roll the reference language across the calendar heatmap and insights + leaderboard. **Calendar
+      done, and now has a real reference**: the user supplied the TradeFXBook "Monthly P&L" screen
+      *(2026-07-17)*, which the redesign follows (Monday-first, weekly column, month nav, today
+      marker) and deliberately departs from where it is weaker (written-out weekday heads, P&L
+      intensity, trade counts). Note `designs/website.index.html` — the wireframe every doc cites — is
+      **no longer in the repo**, and the three saved `app.tradefxbook.com_*.png` builds cover only
+      dashboard / trades / analysis. Insights + leaderboard remain.
 
 ---
 
 ## Phase 5 — Filters, Insights, Leaderboard, Calendar & Trades Table
 
-- [ ] Filter bar (search + asset/direction/result selects + date range + min/max P&L + sort) + quick
-      presets (All / Today / Last 7 Days / Winners / Losses / Liquidations); every panel recomputes off
-      the filtered set.
+- [~] **Filters — chips done, full bar not.** `FilterChips` (time period × result) ships and every
+      panel recomputes off the filtered set. **Still missing:** search, asset/direction selects,
+      explicit from/to date inputs, min/max P&L, and sort. The store and `filterTrades` already
+      support all of them; only the UI is absent.
 - [ ] Risk & edge insight cards + per-symbol asset leaderboard (proportional bars).
-- [ ] Monthly calendar heatmap (P&L intensity).
-- [ ] Trades table (shadcn `Table`): sticky header, side/result badges, signed P&L + running balance,
-      Load More paging, live count, horizontal scroll on mobile.
+- [x] **Calendar heatmap** — `CalendarHeatmap` + pure `lib/calendar.ts`, built then **redesigned the
+      same day** against the TradeFXBook "Monthly P&L" reference the user supplied (the first calendar
+      reference this project has had). Month → weeks → days, **Monday-first**, with a **weekly totals
+      column**, a **month nav that pages within the filtered range** (the chips still own scope), a
+      today marker, and day cells carrying P&L + trade count. Four day states (no trades / breakeven /
+      out-of-window / signed), tint alpha linear on `|day P&L| / max |day P&L|` via `color-mix` on the
+      up/down tokens, `overflow-x-auto` + `min-w-215`.
+      **Verified:** `scripts/verify-calendar.ts` (26 checks) + browser at 1440/900/600 — July 2026
+      starts under Wed with 2 leading blanks, weeks read `+$46.1 (3 days)` / `+$120.3 (2 days)`,
+      Winners re-tints to `+$481.89`, 7 days nets `+$36.57` and flips that week to `-$83.7`, zero
+      console errors.
+- [x] **Trades table** (shadcn `Table`): hover rows, signed P&L + running balance, Load More paging
+      (24-row step), live count, horizontal scroll on mobile, empty state with `Clear filters`.
+      **Not yet:** `SideBadge`/`ResultBadge` pills — side renders as coloured text for now.
+  - [x] **Pips column** *(2026-07-17, beyond plan)* — added after Exit in the shared
+        `trade-columns.tsx`, so **both** tables carry it. Raw `|exit - entry|` from
+        `lib/trade-fields.ts`: unscaled, unsigned, untinted, `—` on a missing fill. Table min-width
+        `min-w-200` → `min-w-220` for the 9th column.
+  - [x] **Size shows one value** *(2026-07-17, beyond plan)* — `filledSize()` renders the filled half
+        of the broker's `"requested/filled"` pair (`0.25/0.25` → `0.25`), which is the size P&L is
+        computed from.
+  - **Verified (both):** `scripts/verify-pips.ts` — 25 checks, incl. the identity
+        `pips x filledSize == |netPnl|` across all 18 seed rows (fees are zero, so it must hold and
+        breaks instantly on any inversion or scaling) — plus every rendered row re-derived from the
+        DOM's own Entry/Exit text, and no `/` left in any Size cell.
 
 ---
 
@@ -166,10 +255,11 @@ Items are only ticked when the code actually lands.
 | Phase                                   | Status        |
 | --------------------------------------- | ------------- |
 | 0 — Foundation                          | **Done** — scaffold, schema, Swagger, dark theme tokens + Inter |
-| 1 — Trading Accounts                    | DB, seed, and the `accounts` + `trades` GET endpoints done; frontend slice not started |
-| 2 — Trades                              | Not started   |
-| 3 — Metrics, Overview & Stats           | Not started   |
-| 4 — Charts (recharts)                   | Not started   |
-| 5 — Filters, Insights, Calendar, Table  | Not started   |
-| 6 — Export, Summary & Accent Theme      | Not started   |
+| 1 — Trading Accounts                    | **Done** — DB, seed, `accounts` + `trades` GET endpoints, cockpit shell |
+| 2 — Trades                              | **Partial** — trade CRUD (API + UI) and the Settings page are done; **CSV import not started** |
+| 3 — Metrics, Overview & Stats           | **Done** — metrics module, filters/store, services, Overview, 27 stat cards |
+| 4 — Charts (recharts)                   | **Built** — all seven render; three known defects open (see Phase 4) |
+| 4.5 — Multi-page redesign               | **In progress** — routes + nav + Overview done; token rebuild and Filters open |
+| 5 — Filters, Insights, Calendar, Table  | **Partial** — trades table + calendar heatmap done; filter chips partial; insights + leaderboard not started |
+| 6 — Export, Summary & Accent Theme      | Not started — `AccentSwitcher` exists; Export CSV / Copy Summary do not |
 | 7 — Polish                              | Not started   |

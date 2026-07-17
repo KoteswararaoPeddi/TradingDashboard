@@ -119,14 +119,24 @@ backend/
     ├── common/          → cross-cutting, domain-agnostic (filters, interceptors). Imports NOTHING from modules/.
     ├── prisma/          → PrismaService + PrismaModule (@Global)
     └── modules/         → one folder per domain
-        ├── accounts/     → trading accounts: list + get one            ← built (read-only)
-        ├── trades/       → trades (account-scoped): list raw           ← built (read-only)
-        └── health/       → health check                                ← built
+        ├── accounts/     → the journal's account: list, get one, settings PATCH   ← built
+        ├── trades/       → trades (account-scoped): list + full CRUD              ← built
+        └── health/       → health check                                           ← built
 ```
 
 **All three feature modules exist** (plus `prisma`, `config`, and the `common` filters + response
-interceptor). They are **read-only**: there are no write endpoints. Trades enter the system through
-`prisma/seed.ts` (`npm run seed`); trade CRUD and CSV import are later phases.
+interceptor). Trades are **user-entered**: `POST/PATCH/DELETE /api/trades` back the add/edit/delete
+UI. `prisma/seed.ts` (`npm run seed`) still loads the reference dataset, but it is **opt-in** — the
+`prisma.seed` hook was removed from `package.json`, so `migrate dev`/`reset` no longer auto-populate
+a journal the user is about to fill themselves. CSV import remains a later phase.
+
+**The account is a singleton, not a resource the user creates.** There is deliberately **no
+`POST /api/accounts`**: this journal is single-user, so `AccountsService.onApplicationBootstrap`
+guarantees exactly one account exists (balance `0`, `USD`). It exists only to carry the starting
+balance the equity curve is measured from — the one number trades cannot supply. The only write is
+`PATCH /api/accounts/:id`, which backs the **Settings** page. Consequently `accountId` is **optional**
+on `POST /api/trades`: with one account, making the client pass an id would be ceremony that can only
+be got wrong, so the service resolves it.
 
 The only global guard is **`ThrottlerGuard`** (basic rate limiting), and every route is open.
 
@@ -155,31 +165,50 @@ in `src/features/*`, cross-cutting UI/utilities live in `src/shared`.
 frontend/src/
 ├── app/
 │   ├── layout.tsx          → Root layout: metadata, Inter font, dark theme, GlobalHosts
-│   ├── globals.css         → Tailwind entry + imports theme.css + the app background grid
+│   ├── globals.css         → Tailwind entry + imports theme.css + the app background wash
 │   ├── page.tsx            → "/" → redirects to /dashboard
 │   └── (app)/              → the app shell (sidebar + main); no guard
-│       ├── layout.tsx      → renders the AppShell (sidebar + topbar) — no session guard
-│       ├── dashboard/page.tsx   → the trading-journal cockpit (the design)
-│       └── settings/page.tsx    → account + preferences (starting balance, currency, accent)
+│       ├── layout.tsx      → renders DashboardShell (sidebar + topbar) — no session guard
+│       ├── dashboard/page.tsx   → the glance: balance hero + support strip + recent activity
+│       ├── analytics/page.tsx   → the deep dive: 27 stat cards + seven charts + insights
+│       ├── trades/page.tsx      → the trade ledger (filters + table)
+│       └── calendar/page.tsx    → the monthly P&L heatmap
+│                                  (settings is not built — see ui-registry.md)
 │
 ├── features/               → one vertical slice per domain
-│   ├── dashboard/          → the cockpit: overview, filters, stats, charts, insights,
-│   │                         leaderboard, calendar heatmap, trades table + lib/metrics.ts
-│   ├── accounts/           → account CRUD + active-account store
-│   └── settings/           → account settings + accent preference
+│   └── dashboard/          → the cockpit: shell, overview, stats, charts, and (to come)
+│                             filters, insights, leaderboard, heatmap, table + lib/metrics.ts
 │       each slice may carry: components/ · lib/ · constants.ts · stores/ · schemas/ · api/ · types/
 │
 └── shared/
     ├── components/ui/      → shadcn/ui primitives
-    ├── components/         → AppShell.tsx (sidebar + topbar; no session guard, no user menu),
-    │                         Sidebar/Topbar + GlobalHosts (Toaster + ConfirmDialog)
-    ├── config/             → sidebar navigation config, chart theme defaults
-    ├── constants/          → route paths, enum labels (sides, statuses, presets)
+    ├── components/         → GlobalHosts (Toaster + ConfirmDialog), ConfirmDialog
+    ├── config/             → app-nav.config.ts (destinations), chart-theme.ts
+    ├── constants/          → routes.ts (route paths), enum labels (sides, statuses, presets)
     ├── lib/                → axios.config.ts, utils.ts (cn), format (currency/date), csv
-    ├── stores/             → confirm.store, active-account, filter, theme-accent store (Zustand)
+    ├── stores/             → confirm.store, filter, theme-accent store (Zustand)
     ├── types/
     └── styles/theme.css    → design tokens (see ui-tokens.md)
 ```
+
+> **The cockpit chrome lives in `features/dashboard/components/shell/`, not `shared/`.** It reads
+> `dashboard.store` and `lib/metrics.ts` to render the account card, and `shared` may never import
+> from `features`. The `(app)` layout renders it as the one client shell around server pages.
+
+### Routing
+
+Four pages, one shell. `shared/config/app-nav.config.ts` is the single source for destinations and
+drives both the sidebar nav and the topbar title/subline.
+
+| Route        | Job |
+| ------------ | --- |
+| `/dashboard` | The 30-second glance: where the account stands. |
+| `/analytics` | The deep dive: every metric and chart. |
+| `/trades`    | The trade ledger. |
+| `/calendar`  | The monthly P&L heatmap. |
+
+**Filters is a control, not a route.** It scopes each page's view and lives in the global filter
+store, so it renders on Analytics / Trades / Calendar and appears nowhere in the nav.
 
 ### Import aliases (`frontend/tsconfig.json`)
 
@@ -196,14 +225,29 @@ the shared axios instance from `@lib/axios.config`.
 
 - **Server Components by default.** A component becomes a Client Component (`"use client"`) only when
   it needs interactivity — forms, filters, anything reading a Zustand store, and **every recharts
-  chart** (canvas + charts are client-only). Push the boundary as low as possible: the dashboard page
-  is a Server shell composing panels; the interactive filter bar, the charts, the table controls, and
-  the accent switcher are the client leaves.
+  chart** (charts are client-only). Push the boundary as low as possible: each page is a Server
+  component composing panels; the interactive filter bar, the charts, the table controls, the nav
+  (it reads `usePathname`), and the accent switcher are the client leaves.
 - **Charts are dynamically imported** (`next/dynamic`, `ssr: false`) — recharts is heavy
   and canvas needs the browser. Keep them out of first paint.
 - **All reads/writes go through the shared axios instance** (`@lib/axios.config`) to feature
   **services** (`features/*/api/*.service.ts`). The instance is now plain — `baseURL` plus a minimal
   403/5xx logger. There is **no 401-refresh flow, no `withCredentials`, and no login redirect**.
+- **The cockpit's data is fetched on the server.** `(app)/layout.tsx` awaits
+  `features/dashboard/api/dashboard.loader.ts` and passes the payload to `DashboardProvider`, so the
+  account + trade set arrive **with the HTML** and the browser makes **zero** API calls. Loading it in
+  a client effect instead cost ~605ms of dead time before the first request even left the browser,
+  with a skeleton on screen throughout. Fetching in the layout (not per page) loads it once for the
+  whole route group.
+  - The loader's two calls are **sequential on purpose**: trades are fetched by `accountId`, so the
+    account must resolve first. That is the genuine data dependency Layer 4 sanctions — and
+    server-side it costs local round trips rather than the user's network latency twice.
+- **The server payload travels by React Context, not a module store.** `DashboardProvider` is the one
+  source; `useCockpit()` reads it. A module-level zustand store **cannot** carry server-rendered data:
+  `useSyncExternalStore`'s server snapshot does not observe a mutation made during the same render, so
+  the HTML rendered empty ("No account") even with the payload present. Context also gives each
+  request its own value, with no shared mutable state. **Filters stay in zustand** — client-only state
+  that is never server-rendered.
 - **Metrics are derived client-side** from the fetched trade set via `features/dashboard/lib/metrics.ts`;
   filters/sort live in a store or local state and drive a single `renderDashboard`-equivalent recompute.
 

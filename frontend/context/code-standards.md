@@ -77,6 +77,15 @@ every session — they prevent pattern drift. See architecture.md for structure.
   flow (no auth).
 - A Client Component calls a service in an effect/handler (or via a small data hook); render
   **loading / empty / error** states for every data view (see ui-rules.md → States).
+- **Fetch on the server, not in an effect.** The cockpit's account + trade set are loaded by
+  `(app)/layout.tsx` via `features/dashboard/api/dashboard.loader.ts` and passed to
+  `DashboardProvider`. A `useEffect` fetch cannot start until the JS has downloaded and hydrated —
+  measured at ~605ms of dead time with a skeleton on screen. Reach for a client fetch only for data
+  that genuinely cannot be known on the server.
+- **Server-loaded data goes through Context, never a module store.** `useSyncExternalStore`'s server
+  snapshot does not see a mutation made during the same render, so a zustand singleton seeded at
+  render time yields **empty server HTML**. Use a provider (see `DashboardProvider`); keep zustand for
+  client-only state such as filters.
 - **Derived analytics are computed, not fetched.** The dashboard fetches the raw trade set
   (`trades.service`) and computes every metric via the pure `features/dashboard/lib/metrics.ts` —
   keep computation out of components and services (services return raw trades only).
@@ -364,7 +373,7 @@ export function TradesTable({ accountId }: Props) {
 
 - Prefer named exports (route entries `page.tsx`/`layout.tsx` are the only defaults).
 - Style with Tailwind classes using the design tokens. Sanctioned inline `style`: decorative
-  gradients, the background grid, and **P&L-proportional widths** — all via `var(--color-*)`, never a
+  gradients, the background wash, and **P&L-proportional widths** — all via `var(--color-*)`, never a
   hardcoded hex.
 - No hardcoded hex or raw Tailwind color literals (incl. `text-white`/`bg-white` → use
   `text-foreground`/`bg-surface`) — use tokens (ui-tokens.md).

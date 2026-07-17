@@ -7,13 +7,24 @@ know what is done, what is in progress, and what is next.
 
 ## Current Status
 
-**Phase 0 — Foundation: done.** Both apps are scaffolded, the database is seeded and served by the
-API, and the dark theme tokens are in. The dashboard cockpit itself is not built yet.
+> **The list below this paragraph is stale in places** (it still describes `/dashboard` as a
+> placeholder and an `AppShell.tsx` that no longer exists). **Trust "## Progress" and build-plan.md
+> over it.** Rewriting it is an open task.
 
-**Trade Journal** is an open, single-user trading-journal analytics dashboard (no auth). The
-reference build is `context/designs/website.index.html` — a dark analytics cockpit: sidebar + topbar
-shell, overview strip, advanced filters, ~27 stat cards, seven recharts charts, insights + asset
-leaderboard, calendar heatmap, and a filterable trades table.
+**Where it actually stands** *(2026-07-17)*: the cockpit is built and running across four routes.
+Done: the shell, Overview, the 27 stat cards, all seven charts, the trades ledger with CRUD, the
+Settings page, filter chips, and the **performance calendar**. Open: the full filter bar (search /
+selects / P&L window / sort), insights + asset leaderboard, CSV import, Export CSV + Copy Summary,
+the type-scale and elevation token rebuild, and three chart defects. See build-plan.md.
+
+**Trade Journal** is an open, single-user trading-journal analytics dashboard (no auth): a dark
+analytics cockpit — sidebar + topbar shell, overview hero, filters, ~27 stat cards, seven recharts
+charts, insights + asset leaderboard, calendar heatmap, and a filterable trades table.
+
+> **There is no HTML reference build any more.** `context/designs/website.index.html` is cited all
+> over these docs but is **not in the repo**; what survives is three `app.tradefxbook.com_*.png`
+> reference screens (dashboard, trades, analysis — **no calendar, no settings**). Treat every
+> `website.index.html` reference in these docs as pointing at something that no longer exists.
 
 **In place:**
 
@@ -34,11 +45,18 @@ leaderboard, calendar heatmap, and a filterable trades table.
   ($1,000 / USD) + **18 BTCUSD trades** (2026-07-08 → 2026-07-15). Source rows are generated verbatim
   into `prisma/seed-data.ts`; `prisma/seed.ts` maps and upserts them. Idempotent — re-running leaves
   1 account / 18 trades.
-- **API endpoints (read-only)** — `GET /api/accounts`, `GET /api/accounts/:id`,
+- **API endpoints** — reads: `GET /api/accounts`, `GET /api/accounts/:id`,
   `GET /api/trades?accountId=&order=asc|desc`, `GET /api/health`. Trades come back **raw**, ordered by
   `closedAt`; the client derives every metric. Verified live end to end: 18 trades →
   **closing balance $1,166.40, win rate 50.00%, profit factor 1.53**; unknown `accountId` → 404;
   bad `order` → 400; unknown query params stripped by the whitelist.
+- **Write endpoints** — `POST/PATCH/DELETE /api/trades` (add/edit/delete) and `PATCH /api/accounts/:id`
+  (Settings). There is **no `POST /api/accounts`**: the account is a singleton created on boot, not a
+  resource the user authors. Verified live: trade created with **no `accountId`** (server resolved the
+  singleton), `"solusd"` normalised to `SOLUSD`, `grossPnl` derived as `netPnl + fees`, junk payload →
+  400, unknown account → 404, injected props stripped, `PATCH` preserved untouched columns, delete →
+  404 on re-delete. End to end through the UI: adding +100 moved the dashboard 1,166.40 → **1,266.40**,
+  and deleting restored it.
 - **Schema** — `TradingAccount` + `Trade` (+ `TradeSide` / `TradeStatus` enums), with
   `@@unique([accountId, ticket])` for idempotent CSV re-import and `@@index([accountId, closedAt])`.
 - **Database** — a dedicated **`trade_journal`** PostgreSQL database on `localhost:5432`, with
@@ -48,7 +66,8 @@ leaderboard, calendar heatmap, and a filterable trades table.
   holds every literal colour (ink ramp, slate text, accent hues, up/down, chip fills, alphas,
   `--shadow-panel`); `:root` is **`var()` references only**; `@theme inline` bridges to Tailwind
   utilities. Accent themes (`body[data-accent]`) swap only the accent trio. Inter is the only font.
-  All 8 legacy palettes are gone. The background grid lives in `globals.css`, token-driven.
+  All 8 legacy palettes are gone. The background wash lives in `globals.css`, token-driven (its 42px
+  grid was removed 2026-07-17 — see ui-tokens.md).
 - **Verified** — frontend `tsc` + `next build` green (routes `/`, `/dashboard`, `/_not-found`);
   backend `tsc --noEmit` green; `prisma generate` green.
 
@@ -82,18 +101,72 @@ leaderboard, calendar heatmap, and a filterable trades table.
   stay reachable. **Verified in a browser:** 27/27 cards, values matching the metric bundle, tones
   correct; zero console errors.
 
+- **Charts (D4)** — all **seven** recharts charts are built and render: equity curve (`AreaChart` +
+  gradient), daily / weekday / hourly P&L, asset performance (horizontal), long-vs-short, and the
+  win/loss donut, each `"use client"` + dynamically imported into a fixed-height `ChartPanel`.
+  Defaults live in `shared/config/chart-theme.ts`, colours read `var(--color-*)`.
+  **Verified in a browser:** 10 recharts surfaces, zero console errors, values reconciling to the
+  metric bundle. **Three defects are open** — see build-plan.md → Phase 4.
+
+- **Multi-page redesign (D5)** — the cockpit is now **four routes**, not one anchored page:
+  `/dashboard` (the glance), `/analytics` (stats + charts), `/trades`, `/calendar`.
+  `shared/config/app-nav.config.ts` drives the sidebar **and** the topbar title. The Overview was
+  redesigned around the 30-second check: `AccountHero` (balance at `display-2xl`, uncoloured, with a
+  signed delta on its baseline) over a six-cell `AccountStrip`. **Verified in a browser** at 1440 /
+  900 / 600 and by clicking every nav link: all four routes resolve, `aria-current` tracks the
+  pathname, zero console errors.
+
+- **Reference-led redesign (D6)** — the cockpit was redesigned against real reference builds
+  (`context/designs/app.tradefxbook.com_*.png`) rather than the original wireframe:
+  - **Nav:** lucide icons + a tinted active pill with an indicator dot, replacing the `01`/`02`
+    markers. A `Menu` section label sits above it.
+  - **Sidebar order:** brand → account card → menu → nav. The card was `mt-auto`-pinned to the
+    bottom, leaving a screen-tall void mid-sidebar.
+  - **`Tile` rebuilt:** optional tinted icon plate (`bg-<tone>/10`), `rounded-xl`, `p-5`, quiet
+    uppercase label at `semibold` with tracking. The 3px `info` accent bar is **gone** — 27 of them
+    was texture competing with the figures.
+  - **`KpiRow`** (4 icon cards) replaces `AccountStrip` (6 hairline cells).
+  - **`AccountHero`** now pairs the balance with **`EquitySpark`**, a chrome-free recharts area.
+  - **`RecentTrades`** puts the last 6 trades on the glance via the shadcn `Table` primitive.
+  - **`--radius` 8px → 12px**, moving the whole derived family (sm 8 / md 10 / lg 12 / xl 16).
+  **Verified in a browser:** typecheck clean, all four routes navigate, zero console errors.
+
+- **Reference pass on Analytics + Trades (D7)** — the remaining two reference screens:
+  - **`FilterChips`** — time period (Today / 7 days / 30 days / All time) × result (All trades /
+    Winners / Losers / Liquidations) as **two orthogonal axes**, on Analytics, Trades and Calendar.
+    New pure helpers `periodRange` / `activePeriod` / `activeResult`.
+  - **`AnalyticsKpis`** — four icon cards leading `/analytics`, so the 27-card grid reads as detail.
+  - **`TradesTable`** — the full ledger: 8 columns, `tabular-nums`, Load more (24-row step), live
+    count, and an empty state carrying `Clear filters`.
+  **Verified in a browser:** 18 → Winners 9 → Winners + 7 days 4 with both chips lit; typecheck
+  clean; zero console errors; `verify-metrics.ts` still green (43 checks).
+
 **Not done yet:**
 
-- The backend is **read-only**: there are no POST/PATCH/DELETE endpoints. Trades enter the system
-  through `npm run seed` only. Trade CRUD and CSV import remain later phases.
-- No `features/` slices exist on the frontend; the whole dashboard cockpit is unbuilt. `/dashboard`
-  is still the placeholder page — it now renders on the dark theme, but shows no trade data.
+- **CSV import is not started.** Trades are entered one at a time through the add-trade dialog; the
+  `@@unique([accountId, ticket])` constraint that would make a re-import idempotent is in place and
+  unused.
+- **The add/edit dialog has not been driven in a browser.** Its submit path is typechecked and the
+  API beneath it is verified live, but the dialog opening, validating and submitting was never
+  clicked through — no browser automation was available in the session that built it.
+- **The calendar heatmap and insights + leaderboard are still placeholders.**
+- **The filter bar is only chips.** Search, asset/direction selects, date inputs, min/max P&L and sort
+  have no UI yet — `filterTrades` and the store already support every one of them.
+- **No `SideBadge`/`ResultBadge`** — the ledger renders side as coloured text, not the design's pills.
+- **The token rebuild is only partial.** `--radius` landed; the **type scale and elevation did not
+  persist** and `theme.css` still holds the original 52/48/35/29 scale (with unusable steps) and the
+  single `0 18px 45px` shadow on everything. See build-plan.md → Phase 4.5.
+- **`/analytics` has not had the reference pass.** The 27-card wall still renders every metric at
+  equal weight with no hierarchy.
+- **The three chart defects are still open** (zero-anchored equity axis, duplicate `$1.1K` ticks,
+  degenerate single-symbol charts). Note `EquitySpark` fixes the axis *for itself* with
+  `domain={["auto","auto"]}`; the `/analytics` curve still needs it.
 
 **Next:**
 
-- Repoint `theme.css` + fonts to the dark design (finishes Phase 0), then build the `accounts` slice
-  (Phase 1) and the `trades` slice (Phase 2) against the migrated database, then the dashboard cockpit
-  (metrics → overview/stats → charts → filters/insights/calendar/table → export/theme).
+- Rebuild the token system (colour ramp, type scale, spacing, elevation), then roll it across the
+  shell, stats grid and charts; fix the three open chart defects; build Filters as a persistent
+  control; then the trades table, calendar and insights.
 
 ---
 
@@ -102,14 +175,98 @@ leaderboard, calendar heatmap, and a filterable trades table.
 See build-plan.md for the full per-phase breakdown.
 
 - [x] Phase 0 — Foundation (scaffold, schema, Swagger, dark theme tokens + Inter)
-- [~] Phase 1 — Trading Accounts (DB, seed, and the `accounts` + `trades` GET endpoints done; frontend slice not started)
-- [ ] Phases 2–6 — Trades, Metrics/Overview/Stats, Charts, Filters/Insights/Calendar/Table, Export/Theme
+- [x] Phase 1 — Trading Accounts (DB, seed, `accounts` + `trades` GET endpoints, cockpit shell)
+- [ ] Phase 2 — Trades (backend still read-only; no CRUD, no CSV import)
+- [x] Phase 3 — Metrics, Overview & Stats (metrics module, filters + store, services, Overview, 27 cards)
+- [~] Phase 4 — Charts (all seven build and render; three defects open — see build-plan.md)
+- [~] Phase 4.5 — Multi-page redesign (routes + nav + Overview done; token rebuild and Filters open)
+- [~] Phase 5 — Filters, Insights, Calendar, Trades table (trades table + calendar heatmap done; filter
+      chips partial; insights + leaderboard not started)
+- [ ] Phase 6 — Export & Copy Summary (the accent switcher exists; the two export actions do not)
 - [ ] Phase 7 — Polish
 
 ---
 
 ## Decisions Made During Build
 
+- **Trade table columns live in one file, rendered by both tables.** The dashboard's Recent activity
+  and the `/trades` ledger had drifted: the glance was missing **Entry** and **Exit** and used
+  different headers (`Closed`/`Asset`/`Direction` vs `Open / close`/`Symbol`/`Type`), because each
+  owned its own copy of the markup. `components/trades/trade-columns.tsx` is now the single source;
+  the ledger passes `withActions` to append its edit/delete cell. The data never needed a fetch
+  change — `entryPrice`/`exitPrice` were already on `EnrichedTrade`; the glance simply wasn't
+  rendering them.
+
+- **The cockpit's data is fetched on the server, not in a client effect.**
+  `(app)/layout.tsx` awaits `api/dashboard.loader.ts` and hands the payload to `DashboardProvider`.
+  Measured before: the first API request left the browser at **+605ms** (after JS download +
+  hydration), data landed at ~740ms, and the server HTML contained **no numbers at all**. After:
+  **0 browser API calls**, and `$1,166.40` ships **in the HTML**. Fetching in the layout rather than
+  per page loads it once for the whole route group.
+- **Server data travels by React Context; a module store cannot carry it.** Seeding a zustand
+  singleton during render *looked* right and typechecked, but the server HTML still rendered
+  "No account": `useSyncExternalStore`'s server snapshot does not observe a mutation made in the same
+  render pass. `DashboardProvider` replaced `dashboard.store` entirely. Context also avoids
+  module-singleton-on-the-server state sharing. **Filters remain in zustand** — client-only state,
+  never server-rendered, so the problem does not arise there.
+
+- **The real reference is `designs/app.tradefxbook.com_*.png`, not `website.index.html`.** Three
+  screenshots of a shipping trading journal (dashboard, trades, analysis) are the visual target. What
+  we took: the tinted-icon-plate KPI card, real nav icons with a tinted active pill, a larger radius,
+  generous card padding, 4-up instead of 5-up, quiet uppercase labels, and pill filter chips. What we
+  did **not** take: their blue primary (our brand is the switchable green/violet/gold accent trio),
+  and their per-metric icon on every card (fine for 4 KPIs, noise across our 27 stat cards).
+- **The reference design is now a wireframe, not the source of truth.** The UI/UX is designed
+  deliberately against the product's job rather than transcribed from
+  `designs/website.index.html`. Tokens are open to redesign; **dark-only, Inter-only, and the
+  green-up / red-down P&L language stay**, and the palette → semantic → utility spine stays because
+  it is what makes the accent themes work. project-overview.md's "the UI matches the design" success
+  criterion is retired.
+- **The cockpit is four pages, not one long anchored page.** `/dashboard` answers the 30-second check;
+  `/analytics` holds the 27 cards and seven charts; `/trades` and `/calendar` are their own jobs.
+  **Trade-off:** the `IntersectionObserver` active-state and `constants/sections.ts` are gone, and the
+  nav is now `usePathname`-driven. **Why:** the sidebar was never navigation — it was a table of
+  contents for one page — and "Overview / Stats / Charts" are depth levels of one task, not places.
+- **Filters is a control, not a destination.** As a page you would set filters, navigate away to see
+  their effect, and navigate back. It scopes every view, so it renders on the pages it narrows and
+  stays out of the nav. The filter store was already global, which is exactly the right shape.
+- **Filter chips are two orthogonal axes, not one preset list.** Time period writes only `from`/`to`;
+  result writes only `result`/`direction`. `presetFilters` rebuilds *every* field from a clean slate,
+  so under it "Last 7 days" silently discarded "Winners" — the combination "how did my winners do this
+  week" was unreachable, and that is the question a trading journal exists to answer. **Rule:** if two
+  filters answer different questions, they must compose; a preset that resets unrelated fields is a
+  preset that hides answers.
+- **`activePeriod` tests `all` before the fixed windows, and the order is load-bearing.** Windows clamp
+  to the account's own history, so on 8 days of trades the 30-day window *is* the full range and two
+  chips match identical dates. When a window covers everything there is, "All time" is the honest
+  label; "30 days" would imply a boundary the data does not have.
+- **Numeric table columns are `tabular-nums`, always.** Inter's proportional digits make `1` narrower
+  than `8`, so a money column jitters and cannot be scanned vertically. This single utility is most of
+  what makes a ledger read as a ledger.
+- **Empty states carry the way out.** With filters applied, "no trades" is nearly always a filter
+  problem, so `Clear filters` sits inside the empty state rather than back up in a control the user
+  must go hunting for.
+- **One config drives the nav *and* the page titles** (`shared/config/app-nav.config.ts`), so a page
+  cannot be called "Analytics" in the sidebar and something else at the top of its own page. Route
+  paths stay in `shared/constants/routes.ts` — constants hold authoritative values, config composes
+  them for rendering.
+- **Exactly one figure per page may carry display size.** The Overview previously showed eight figures
+  at near-equal weight, so the eye had no entry point — fatal for a glance. The balance is now the
+  only `display-2xl`; the other six dropped to one quiet weight. **Rule:** if a new figure seems to
+  deserve display size, it doesn't. Put it in the strip.
+- **A balance is a level, not a signed value — it is uncoloured.** The delta beside it carries the
+  green/red. Colouring both says the same thing twice, and if everything is green when you are up,
+  nothing is. This is a deliberate **deviation from the original ui-rules**, applied to both
+  `AccountHero` and the sidebar `AccountCard`. The trades table's *running* balance is a genuine
+  per-row signed comparison and stays coloured.
+- **The page title is a label, not the headline.** It rendered the account name at up to 56px, which
+  made the loudest thing on the page a caption for what you were already looking at, and put it in
+  direct competition with the balance. It is now the page name at 29px; the account identity lives in
+  the sidebar brand block, where it already was.
+- **The overview's void was structural, not cosmetic.** Panel's `aside` prop built a `1.25fr/0.75fr`
+  grid whose columns could never agree on height, so the shorter one always trailed empty space.
+  Stacking hero over strip removes the void by construction rather than propping a column up with
+  filler. **Rule:** when two columns must match height but hold unrelated content, they will not.
 - **No auth — open, single-user personal app.** No login, signup, email OTP, JWT, or cookies, and no
   user identity: the data is just "my accounts / my trades", scoped by `accountId` where relevant.
   **Trade-off:** the API is unauthenticated, so the app is for **local/personal use** and is not safe
@@ -182,6 +339,29 @@ See build-plan.md for the full per-phase breakdown.
   blocks. Rather than turning CSP off app-wide, `/api/docs` is exempted and every other path keeps the
   strict policy — the API serves only JSON, so the docs page is the sole HTML surface.
 - **No AI / no market feed / no execution** — this is a journal, not a terminal.
+- **The calendar's nav pages; the filter scopes** *(2026-07-17)*. The docs asked for both a "monthly
+  heatmap" (ui-registry, build-plan) and "daily P&L across the selected range" (project-overview) —
+  different features that only agree while the dataset spans one month. Settled: `FilterChips` decides
+  which months exist and which days are in scope, and the `‹ ›` nav only pages between *those* months,
+  one at a time. So the nav can never show a month the chips excluded, and the two controls cannot
+  state different things — which is the failure a free-standing month nav (as in the reference) has.
+  Both arrows disable on a single-month range.
+- **The week is Monday-first, and `DAY_NAMES` must not be reordered to match** *(2026-07-17)*. A
+  trading week is Mon-Fri, so the calendar displays Mon→Sun via `WEEKDAY_LABELS` in `lib/calendar.ts`.
+  But `DAY_NAMES` in `metrics.ts` is **Sunday-based on purpose**: it indexes `weekdayPnl` straight off
+  `getUTCDay()`, and rotating it would silently mislabel every weekday chart. Two lists, two jobs —
+  display order is not bucket order.
+- **The calendar's design reference arrived late** *(2026-07-17)*. It was first built blind (no
+  calendar existed in any saved design), then redesigned against the TradeFXBook "Monthly P&L" screen
+  the user supplied: Monday-first, weekly totals column, month nav, today marker. Departures from it
+  are deliberate and recorded in ui-registry.md. Note `designs/website.index.html`, cited across these
+  docs as *the* wireframe, is **no longer in the repo** — treat every reference to it as stale.
+- **Dates display DD-MM-YYYY, but sort as ISO.** `formatDate` in `shared/lib/format.ts` reformats at
+  the render edge only; `closedAt` stays a raw ISO string everywhere it is compared, grouped or
+  sorted (`filters.ts`, `metrics.ts` day keys), because ISO strings order correctly under
+  `localeCompare` and DD-MM-YYYY does not. `formatDate` slices the string rather than going through
+  `new Date()`, which would re-project the instant into the viewer's timezone and disagree with the
+  UTC day buckets the charts use.
 
 ---
 

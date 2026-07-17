@@ -1,7 +1,18 @@
-import { Controller, Get, Query } from "@nestjs/common";
-import { ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from "@nestjs/swagger";
+import { Trade } from "@prisma/client";
 
+import { CreateTradeDto } from "./dto/create-trade.dto";
 import { FindTradesDto } from "./dto/find-trades.dto";
+import { UpdateTradeDto } from "./dto/update-trade.dto";
 import { TradeEntity } from "./entities/trade.entity";
 import { TradesService } from "./trades.service";
 
@@ -47,5 +58,64 @@ export class TradesController {
   async findAll(@Query() query: FindTradesDto): Promise<{ message: string; data: TradeEntity[] }> {
     const data = (await this.trades.findAll(query)) as TradeEntity[];
     return { message: "OK", data };
+  }
+
+  @ApiOperation({
+    summary: "Add a trade",
+    description:
+      "P&L is entered, not derived. Only symbol, side, netPnl and closedAt are required — " +
+      "the rest is display detail for the trades table.",
+  })
+  @ApiCreatedResponse({
+    description: "The created trade.",
+    schema: { example: { success: true, message: "Trade added.", data: TRADE_EXAMPLE } },
+  })
+  @ApiNotFoundResponse({
+    description: "The accountId does not exist.",
+    schema: { example: { success: false, message: 'No trading account with id "abc".' } },
+  })
+  @ApiConflictResponse({
+    description: "That ticket already exists on this account.",
+    schema: { example: { success: false, message: "That value is already in use." } },
+  })
+  @Post()
+  async create(@Body() dto: CreateTradeDto): Promise<{ message: string; data: Trade }> {
+    return { message: "Trade added.", data: await this.trades.create(dto) };
+  }
+
+  @ApiOperation({
+    summary: "Edit a trade",
+    description: "A trade's account is fixed at creation, so accountId cannot be patched.",
+  })
+  @ApiParam({ name: "id", description: "Trade id (cuid)." })
+  @ApiOkResponse({
+    description: "The updated trade.",
+    schema: { example: { success: true, message: "Trade updated.", data: TRADE_EXAMPLE } },
+  })
+  @ApiNotFoundResponse({
+    description: "No trade with that id.",
+    schema: { example: { success: false, message: 'No trade with id "abc".' } },
+  })
+  @Patch(":id")
+  async update(
+    @Param("id") id: string,
+    @Body() dto: UpdateTradeDto,
+  ): Promise<{ message: string; data: Trade }> {
+    return { message: "Trade updated.", data: await this.trades.update(id, dto) };
+  }
+
+  @ApiOperation({ summary: "Delete a trade" })
+  @ApiParam({ name: "id", description: "Trade id (cuid)." })
+  @ApiOkResponse({
+    description: "The deleted trade.",
+    schema: { example: { success: true, message: "Trade deleted.", data: TRADE_EXAMPLE } },
+  })
+  @ApiNotFoundResponse({
+    description: "No trade with that id.",
+    schema: { example: { success: false, message: 'No trade with id "abc".' } },
+  })
+  @Delete(":id")
+  async remove(@Param("id") id: string): Promise<{ message: string; data: Trade }> {
+    return { message: "Trade deleted.", data: await this.trades.remove(id) };
   }
 }

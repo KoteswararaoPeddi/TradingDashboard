@@ -37,6 +37,53 @@ export interface Trade {
 }
 
 /**
+ * Body for POST /api/trades — mirrors the API's CreateTradeDto.
+ *
+ * Only the four fields the analytics actually need are required: `lib/metrics.ts`
+ * reads `symbol`, `side`, `netPnl` and `closedAt` (plus `openedAt` for hold time).
+ * Everything else is display detail on the trades table, so the form never blocks
+ * on it. P&L is entered, never derived — see the DTO for why.
+ */
+export interface CreateTradeInput {
+  /**
+   * Omit it. The journal has one account and the API resolves it server-side, so
+   * the form never has to know an id exists.
+   */
+  accountId?: string;
+  symbol: string;
+  side: TradeSide;
+  /** Net P&L after fees. Negative for a loss. Every metric builds on this. */
+  netPnl: number;
+  /** ISO-8601, UTC. */
+  closedAt: string;
+  openedAt?: string;
+  size?: string;
+  entryPrice?: number;
+  exitPrice?: number;
+  fees?: number;
+  ticket?: string;
+  status?: TradeStatus;
+}
+
+/** Body for PATCH /api/trades/:id. A trade's account is fixed at creation. */
+export type UpdateTradeInput = Partial<Omit<CreateTradeInput, "accountId">>;
+
+/**
+ * Body for PATCH /api/accounts/:id — the journal's settings.
+ *
+ * There is no create counterpart: this journal is single-user, so its account is
+ * a singleton the API provisions on boot. It is never authored, only adjusted —
+ * which is why `accountNumber` is absent too, being internal bookkeeping the user
+ * has no reason to set.
+ */
+export interface UpdateAccountInput {
+  /** Re-bases every metric derived from the equity curve. */
+  startingBalance?: number;
+  label?: string;
+  currency?: string;
+}
+
+/**
  * A trade plus the values derived once across the whole account.
  *
  * `index` and `balanceAfter` are deliberately computed over **all** trades, not

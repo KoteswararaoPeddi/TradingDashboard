@@ -15,8 +15,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "prisma": {
-    "schema": "prisma/schema.prisma",
-    "seed": "ts-node prisma/seed.ts"
+    "schema": "prisma/schema.prisma"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

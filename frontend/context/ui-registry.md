@@ -54,10 +54,79 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 | Label | `ui/label.tsx` | `<label>`, `text-body-sm font-medium text-foreground select-none`. |
 | Typography | `ui/typography/` | Polymorphic text component. **All content text goes through it** (variant + weight props); color/layout via `className`. Weights: normal → extrabold, plus **`black` (900)** added for the cockpit's numerics (balances, stat values, the page title), which the design sets at 900. Variants emit `font-heading`/`font-body`; both are aliases of Inter in `theme.css` (without those tokens the classes would resolve to nothing). |
 | Dialog | `ui/dialog.tsx` | **shadcn** (base-ui). Add-trade / edit-trade / confirm dialogs. Controlled via `open`/`onOpenChange`; built-in ✕ (`showCloseButton={false}` to hide). |
-| Table | `ui/table.tsx` | **shadcn**, CLI-installed when the trades table lands. Sticky `th`, hover rows, `overflow-x-auto` wrapper (the table `min-width` forces horizontal scroll on mobile). |
+| Table | `ui/table.tsx` | **shadcn**, CLI-installed. Ships its own `overflow-x-auto` container, so a `min-w-*` on the `<Table>` forces horizontal scroll on mobile rather than squashing columns. Used by `RecentTrades` (`min-w-160`); the full ledger will reuse it. Header cells are `font-medium text-muted-foreground`, **not** uppercase-black. |
 | DropdownMenu | `ui/dropdown-menu.tsx` | **shadcn** (base-ui). Row actions / overflow menus. (The user menu it also served is gone — no auth.) |
 | Skeleton | `ui/skeleton.tsx` | **shadcn** (`animate-pulse rounded-md bg-muted`). **Use for all loading placeholders** — pass geometry via `className`. Never hand-roll `animate-pulse` divs. |
 | Toaster | sonner (in `GlobalHosts`) | sonner `<Toaster position="top-right" richColors />` mounted once in root `layout.tsx`. Call `toast.loading/success/error` anywhere. |
+
+---
+
+## Trade table columns — one source *(imprinted 2026-07-16)*
+
+File: `components/trades/trade-columns.tsx` — rendered by **both** `trades/TradesTable` (the full
+ledger) and `overview/RecentTrades` (the dashboard glance).
+
+| Export | Purpose |
+| ------ | ------- |
+| `TradeHeadCells({ withActions })` | The 9 header cells, + an sr-only Actions head when `withActions` |
+| `TradeRowCells({ trade, withActions })` | One trade's 9 cells; the caller appends its own actions cell |
+| `TRADE_TABLE_MIN_WIDTH` | `min-w-220` — below this the table scrolls rather than crushing 9 columns. **Both** tables use it; there is no narrow variant |
+
+**Columns, in order:** Open / close · Symbol · Type · Entry · Exit · **Pips** · Size · P&L · Balance.
+
+| Property | Class |
+| -------- | ----- |
+| Head cell | `text-label-sm font-semibold tracking-wider text-subtle-foreground uppercase` |
+| Open / close | two lines: `closedAt` via `formatDate` (DD-MM-YYYY) over `open → close · holdTime` in `text-subtle-foreground` |
+| Type | `font-semibold` + `SIDE_CLASS` — LONG `text-up` / SHORT `text-info` / LIQUIDATION `text-down` |
+| Entry / Exit / Pips / Size | `text-right text-muted-foreground tabular-nums`, `—` when null. Pips + Size come from `lib/trade-fields.ts` |
+| P&L | `text-right font-bold tabular-nums` + signed `text-up`/`text-down`, explicit `+` prefix |
+| Balance | `text-right text-muted-foreground tabular-nums` |
+| Row | `border-border hover:bg-surface-wash` (ledger adds `group` for hover actions) |
+
+**Pattern notes:**
+
+- **Never hand-write trade columns.** The two tables drifted exactly this way once: the glance was
+  missing **Entry** and **Exit** and used different labels (`Closed`/`Asset`/`Direction`) because each
+  owned a copy. Add a column here and both tables get it.
+- **`withActions` moves the trailing padding.** Without an actions column, Balance takes `pr-4.5` so
+  the last column never sits flush.
+- **`tabular-nums` on every numeric cell** so digits align down the column.
+- **Entry/Exit are prices, not money** — rendered raw with `—` when null, so a missing fill never
+  reads as a real `$0.00` trade.
+- **Size shows the filled half only** *(2026-07-17)*. The raw field is a broker `"requested/filled"`
+  pair (`"0.25/0.25"`); `filledSize()` renders `0.25`. Only the filled figure is real — on a partial
+  fill the two differ, and the requested one describes an intention, not a position. It is also the
+  size the row's **P&L is computed from**, so showing the pair (or the requested half) would print a
+  number the money on the row disagrees with. Tolerates a plain `"1"` from hand-entered trades.
+- **Pips is a raw distance: unscaled, unsigned, untinted** *(2026-07-17)*. `Math.abs(exit - entry)`
+  from `lib/trade-fields.ts`, to 1dp via `formatPips`. **No pip-size conversion and no currency**, so the
+  figure ties back to the Entry and Exit columns by plain subtraction and a reader can check it by
+  eye. **No `+`/`-` and no colour**: it is a distance, and Type and P&L either side already say which
+  way it went and what it earned — a sign here would only restate them. Dropping the sign also means
+  direction never enters the maths, so a `LIQUIDATION` (whose side records no direction) still gets a
+  real number. `—` when either fill is missing — null, never `0.0`, because an unrecorded fill did
+  not travel zero pips.
+- The glance carries **no actions**: editing belongs on `/trades`, where you went to manage trades.
+
+---
+
+## Data flow — read this before wiring any panel
+
+| Piece | File | Role |
+| ----- | ---- | ---- |
+| `loadDashboard()` | `api/dashboard.loader.ts` | **Server** fetch (account → trades). Never throws; returns `{ account, trades, error }`. |
+| `DashboardProvider` | `components/DashboardProvider.tsx` | Client provider. Enriches trades, exposes `{ status, error, account, trades }` via Context. |
+| `useDashboardData()` | same file | The raw server data. Throws outside the provider, by design. |
+| `useCockpit()` | `hooks/use-cockpit.ts` | **What panels call.** Applies filters and returns `{ metrics, filtered, … }`. |
+
+- **A panel never fetches.** It calls `useCockpit()` and renders. The data is loaded once, on the
+  server, by `(app)/layout.tsx` — the browser makes zero API calls.
+- **Never put server-loaded data in a zustand store.** `useSyncExternalStore`'s server snapshot misses
+  a same-render mutation, so the HTML renders empty. Context is what survives the server render;
+  zustand is for client-only state (filters).
+- **There is no loading state for the trade set** — it ships with the HTML, so panels handle `error`
+  only. Skeletons remain for `ssr:false` charts, which genuinely cannot server-render.
 
 ---
 
@@ -67,22 +136,26 @@ The trading cockpit's custom composites (no shadcn equivalent). All live under
 `features/dashboard/components/*`; the numbers come from `features/dashboard/lib/metrics.ts`.
 Rows marked **target** are patterns from `designs/website.index.html` that are not built yet.
 
-### Built — the shell *(imprinted 2026-07-16)*
+### Built — the shell *(imprinted 2026-07-16; re-imprinted after the multi-page redesign)*
 
 | Composite | File |
 | --------- | ---- |
 | DashboardShell | `components/shell/DashboardShell.tsx` |
 | BrandBlock | `components/shell/BrandBlock.tsx` |
-| SectionNav | `components/shell/SectionNav.tsx` |
+| MainNav | `components/shell/MainNav.tsx` |
 | AccountCard | `components/shell/AccountCard.tsx` |
 | AccentSwitcher | `components/shell/AccentSwitcher.tsx` |
 | Topbar | `components/shell/Topbar.tsx` |
 | Panel | `components/Panel.tsx` |
+| SectionPlaceholder | `components/SectionPlaceholder.tsx` |
+
+**Removed in the redesign:** `SectionNav.tsx` and `constants/sections.ts` (the single-page cockpit's
+anchor nav + its section list) — replaced by `MainNav` reading `shared/config/app-nav.config.ts`.
 
 | Property | Class |
 | -------- | ----- |
-| Shell grid | `grid min-h-screen grid-cols-1 min-[1181px]:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]` |
-| Sidebar | `bg-surface/88 backdrop-blur-lg px-4.5 py-5.5 border-b border-border` → `min-[1181px]:sticky min-[1181px]:top-0 min-[1181px]:h-screen min-[1181px]:border-r min-[1181px]:border-b-0` |
+| Shell grid | `min-h-screen min-[1181px]:grid min-[1181px]:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]` — **block flow below 1181px, not a stacked grid** (see notes) |
+| Sidebar | `sticky top-0 z-30 bg-surface/88 backdrop-blur-lg px-4.5 py-5.5 border-b border-border` → `min-[1181px]:h-screen min-[1181px]:border-r min-[1181px]:border-b-0` |
 | Main | `min-w-0 p-4 md:p-6.5` |
 | Panel container | `overflow-hidden rounded-lg border border-border bg-linear-to-b from-surface-wash to-surface-wash-soft shadow-panel scroll-mt-6` |
 | Panel header | `flex items-start justify-between gap-3.5 p-4.5 pb-0`; title `Typography variant="h3" weight="black"`; sub `variant="body-sm" text-muted-foreground mt-1.5` |
@@ -90,10 +163,16 @@ Rows marked **target** are patterns from `designs/website.index.html` that are n
 | Raised well | `rounded-lg border border-border-soft bg-surface-well p-2.5` |
 | Empty state | `rounded-lg border border-dashed border-border bg-surface-wash-soft p-9 text-center` |
 | Card surface | `bg-linear-to-b from-surface-wash to-surface-wash-soft` + `border border-border` + `shadow-panel` |
-| Nav item | `flex min-h-10.5 items-center gap-2.5 rounded-lg border border-transparent px-3 text-body-sm font-bold` |
-| Nav item (active) | `border-border bg-surface-wash text-foreground` |
-| Nav item (idle) | `text-muted-foreground hover:border-border hover:bg-surface-wash hover:text-foreground` |
-| Nav marker | `grid size-5.5 place-items-center rounded-md bg-surface-wash text-label-sm font-black text-primary` |
+| Sidebar order | brand → `Menu` label → nav → account card *(2026-07-17)*. **Not** `mt-auto` on the card (see notes) |
+| Nav item | `group relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-body-base font-semibold transition-colors` |
+| Nav item (active) | `bg-primary/10 text-foreground` + `aria-current="page"` |
+| Nav item (idle) | `text-muted-foreground hover:bg-surface-wash hover:text-foreground` |
+| Nav icon | `size-4.5 shrink-0`; `text-primary` active, `text-subtle-foreground group-hover:text-muted-foreground` idle |
+| Nav active dot | `ml-auto size-1.5 shrink-0 rounded-full bg-primary` |
+| Nav separator *(2026-07-17)* | `my-1 h-px bg-border max-[1180px]:hidden` — divides the four destinations from **Settings** |
+| Section label | `variant="label-sm" weight="semibold"` + `mb-2 block px-3 tracking-wider text-subtle-foreground uppercase` |
+| Page title (topbar) | `Typography as="h1" variant="h2" weight="black" className="text-foreground"` |
+| Page subline | `variant="body-sm" className="mt-1 max-w-3xl text-muted-foreground"` |
 | Brand mark | `grid size-10.5 place-items-center rounded-lg bg-linear-to-br from-primary to-info text-primary-fg` + brand-tinted glow via `color-mix` |
 | Micro-label | `Typography variant="label-sm\|label-base" weight="extrabold" className="text-muted-foreground uppercase"` |
 | Big numeric | `Typography variant="h1\|display-*" weight="black"` + signed colour |
@@ -104,17 +183,52 @@ Rows marked **target** are patterns from `designs/website.index.html` that are n
 **Pattern notes:**
 
 - **`Panel` is the only section container.** Every cockpit section renders through it, so the header
-  rhythm and surface are defined once. It takes `id` (the sidebar's anchor target) and `scroll-mt-6`
-  keeps an anchored section clear of the top edge. Pass `padded={false}` for tables/charts/strips
-  that supply their own padding.
-- **The sidebar reads the full trade set, the panels read the filtered set.** `AccountCard` is fed
+  rhythm and surface are defined once. It takes `id` and `scroll-mt-6` keeps a linked section clear of
+  the top edge. Pass `padded={false}` for tables/charts/strips that supply their own padding.
+- **The sidebar reads the full trade set, the pages read the filtered set.** `AccountCard` is fed
   metrics over *all* trades on purpose: the account's standing must not move when a filter narrows
-  the panels beside it.
+  the page beside it.
 - **Signed colour is mechanical**, never decorative: `>= 0 → text-up`, `< 0 → text-down`. Win Rate and
-  Trades take no tone because they are unsigned.
-- **`SectionNav` uses `IntersectionObserver`, not a scroll handler** — it only fires on boundary
-  crossings instead of running work every scroll frame. When several sections are visible the topmost
-  wins, so the highlight tracks reading position rather than flickering.
+  Trades take no tone because they are unsigned. **A balance takes no tone either** — see
+  ui-rules.md → Color & Type Usage.
+- **`MainNav` is route nav, not anchor nav.** Active state is `usePathname() === item.href` and marks
+  itself `aria-current="page"`. The old `SectionNav`'s `IntersectionObserver` is **gone**: it existed
+  only to track which section had scrolled into view, and there are no in-page sections to track.
+- **Settings is separated, not a fifth destination** *(2026-07-17)*. `APP_NAV`'s four entries are
+  analytical views of one trade set — places you jump between while working. Settings is configuration
+  you visit rarely, so it lives in `SETTINGS_NAV` and renders under a hairline rule. It is **not**
+  pinned with `mt-auto`: that is exactly what left a screen-tall void mid-sidebar when the account card
+  was pinned. `navItemFor()` searches `[...APP_NAV, SETTINGS_NAV]` so the topbar still finds its title.
+  The rule is `max-[1180px]:hidden` — below 1181px the nav is a horizontal scroller, where a rule would
+  take a whole column slot and read as an empty tab.
+- **One `NavLink` component for both groups.** Settings must *be* the same control as the four
+  destinations, not a lookalike that drifts out of sync when the active treatment changes.
+- **Icons, not `01`/`02` markers.** Numbering four destinations implies a sequence you work through,
+  which is false — they are places you jump between. An icon is also recognised without being read,
+  which is the whole job of nav at a glance. Icons live in the nav config as `LucideIcon` refs.
+- **The active row is marked three ways** — tinted surface, accent icon, and the trailing dot. That
+  redundancy is deliberate: colour alone leaves the state invisible to anyone who cannot separate the
+  accent from muted grey.
+- **The shell drops out of grid layout below 1181px, and that is what makes the nav stick.** A grid
+  item's sticky containing block is its own **grid area**. Stacked (`grid-cols-1`), the sidebar is row
+  1 and that row is exactly as tall as the sidebar — so `sticky top-0` has zero room to travel and
+  silently does nothing, with no error and no visual clue. Using block flow on mobile makes the page
+  the containing block, so it sticks. Above 1181px the grid returns and the sidebar sticks inside its
+  full-height column. **If a `sticky` element ever refuses to stick, check whether a grid or flex
+  parent has boxed it into an area its own size.**
+- **Sidebar is `z-30`,** above panels and the `backdrop-blur-lg` wash, so scrolled table rows pass
+  under it rather than through it.
+- **The account card sits below the nav, and never `mt-auto` to the bottom** *(moved 2026-07-17;
+  previously under the brand)*. The load-bearing half of this rule is the `mt-auto` ban, not the
+  position: **pinned**, the card left a screen-tall void between it and the nav that read as a broken
+  layout. In normal flow it closes up under the nav and the sidebar ends where its content ends —
+  which is why "below the nav" and "pinned to the bottom" are not the same instruction. Reading order
+  is now: who this is → where to go → how it's doing.
+- **One config drives nav and titles.** `shared/config/app-nav.config.ts` holds `{ href, label,
+  marker, subline }` per destination; `MainNav` renders it and `Topbar` looks up the current pathname
+  in it via `navItemFor()`. A page therefore cannot be called one thing in the sidebar and another at
+  the top of its own page. Route paths themselves live in `shared/constants/routes.ts` (constants hold
+  authoritative values; config composes them for rendering).
 - **`AccentSwitcher` reads `localStorage` in an effect, never during render.** The server renders
   `DEFAULT_ACCENT`; reading storage while rendering would desync hydration. It only writes
   `document.body.dataset.accent` — no component knows which hue is active.
@@ -129,20 +243,28 @@ Rows marked **target** are patterns from `designs/website.index.html` that are n
 - **Not built yet in the topbar:** Copy Summary + Export CSV. They depend on the filtered set and land
   with the export slice.
 
-### Built — Tile, the shared figure card *(imprinted 2026-07-16)*
+### Built — Tile, the shared figure card *(re-imprinted 2026-07-16, redesigned against the reference builds)*
 
-File: `components/Tile.tsx` — used by the market board **and** the stats grid.
+File: `components/Tile.tsx` — used by the overview's `KpiRow` **and** the stats grid.
 
 | Property | Class |
 | -------- | ----- |
-| Container | `relative min-h-30 overflow-hidden rounded-lg border border-border-tile bg-surface-tile p-4` |
-| Accent bar | `before:absolute before:top-0 before:left-0 before:h-full before:w-0.75 before:bg-info before:content-['']` |
-| Interactive | `transition-all hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-raised/92` |
-| Label | `Typography variant="label-base" weight="extrabold"` + `block text-muted-foreground uppercase` |
-| Value | `variant="h2" weight="black"` + `mt-2.5 block leading-none wrap-anywhere` + tone |
-| Note | `variant="body-sm"` + `mt-2.5 text-muted-foreground` |
+| Container | `flex flex-col rounded-xl border border-border-tile bg-surface-tile p-5` |
+| Height | `min-h-45` with an icon, `min-h-30` without |
+| Icon plate | `mb-5 grid size-11 shrink-0 place-items-center rounded-xl` + `TONE_PLATE_CLASS[tone]` |
+| Interactive | `transition-colors hover:border-border-strong hover:bg-surface-raised/92` |
+| Label | `Typography variant="label-sm" weight="semibold"` + `block tracking-wider text-muted-foreground uppercase` |
+| Value | `variant="h1"` with an icon / `"h2"` without, `weight="black"` + `mt-2 block leading-none wrap-anywhere` + `TONE_CLASS[tone]` |
+| Note | `variant="body-sm"` + `mt-auto pt-3 text-subtle-foreground` |
 
-**Tone map** (`Tone` is exported from `Tile.tsx` — the one source for figure colour):
+**Icon plate tint** (`TONE_PLATE_CLASS`, private to `Tile.tsx`): a 10% wash of the tone's own hue
+behind the glyph — `bg-up/10 text-up`, `bg-down/10 text-down`, `bg-info/10 text-info`,
+`bg-warning/10 text-warning`, `bg-purple/10 text-purple`. It categorises the card at a glance without
+introducing a sixth colour, and it reads at arm's length where a text colour alone does not.
+
+**Tone map** (`Tone` **and `TONE_CLASS`** are exported from `Tile.tsx` — the one source for figure
+colour. Figure surfaces that aren't tiles, like the overview's support strip, import `TONE_CLASS`
+rather than keeping a second copy):
 
 | Tone | Class | Meaning |
 | ---- | ----- | ------- |
@@ -154,52 +276,85 @@ File: `components/Tile.tsx` — used by the market board **and** the stats grid.
 
 **Pattern notes:**
 
-- **Build every figure card on `Tile`.** The design shares one base between `.market-tile` and
-  `.stat-card`; duplicating it would let the two drift. `interactive` adds the hover lift (stats grid
-  uses it, the market board does not).
+- **No accent bar.** The reference cockpit put a 3px `info` bar on every tile as its signature, but
+  the stats grid renders **27** of them: 27 identical bars carrying no information is texture
+  competing with the only thing on the card worth reading. Removed.
+- **The icon is optional, and that is the hierarchy.** The four KPI cards on `/dashboard` take an
+  icon and render their value at `h1`; the 27 stat cards take none and render at `h2`. Same
+  component, two weights of importance. **Don't give the stats grid icons** — 27 glyphs is the accent
+  bar problem again, in a new costume.
+- **Build every figure card on `Tile`.** One base for the KPI row and the stats grid; duplicating it
+  would let the two drift. `interactive` adds the hover response (stats grid uses it, the KPI row
+  does not).
 - **`wrap-anywhere` on the value** so a long money string breaks instead of widening its grid track.
 - **`neutral` reads the palette's `text-purple` directly.** Fixed, non-themeable hues (`purple`,
   `short`, `flat`) have no role the accent themes could change, so they skip the semantic layer.
   Anything with a *role* (surfaces, borders, accents, P&L) must still go palette → semantic → utility.
 
-### Built — the overview *(imprinted 2026-07-16)*
+### Built — the overview *(re-imprinted 2026-07-16, redesigned for the glance)*
 
 | Composite | File |
 | --------- | ---- |
 | Overview | `components/overview/Overview.tsx` |
-| AccountStrip | `components/overview/AccountStrip.tsx` |
-| MarketBoard | `components/overview/MarketBoard.tsx` (renders `Tile`) |
+| AccountHero | `components/overview/AccountHero.tsx` (balance + delta + `EquitySpark`) |
+| EquitySpark | `components/overview/EquitySpark.tsx` (recharts, `"use client"`, dynamic) |
+| KpiRow | `components/overview/KpiRow.tsx` (4 × `Tile` with icons) |
+| RecentTrades | `components/overview/RecentTrades.tsx` (shadcn `Table`) |
+
+**Removed in the redesign:** `MarketBoard.tsx`, then `AccountStrip.tsx` — the hairline six-cell strip
+was replaced by `KpiRow`'s four icon cards. Best/Worst Trade dropped from the glance entirely: they
+answer "what was my luckiest day", not "how am I doing", and already live in the stats grid.
 
 | Property | Class |
 | -------- | ----- |
-| Strip container | `grid grid-cols-1 border-y border-border bg-surface-well-soft min-[781px]:grid-cols-4` |
-| Strip cell | `@container min-h-28 border-b border-border p-4.5 last:border-b-0 min-[781px]:border-r min-[781px]:border-b-0 min-[781px]:last:border-r-0` |
-| Strip label | `Typography variant="label-base" weight="extrabold"` + `text-muted-foreground uppercase` |
-| Strip value | `variant="display-lg" weight="black"` + `text-[clamp(1.375rem,19cqi,2.125rem)] leading-none whitespace-nowrap` + tone |
-| Strip note | `variant="body-sm" text-muted-foreground mt-2.5` |
-| Market board | `grid h-full grid-cols-1 gap-3 sm:grid-cols-2` |
-| Market tile | `relative min-h-30 overflow-hidden rounded-lg border border-border-tile bg-surface-tile p-4` |
-| Tile accent bar | `before:absolute before:top-0 before:left-0 before:h-full before:w-[3px] before:bg-info before:content-['']` |
-| Tile value | `variant="h2" weight="black" mt-2.5 leading-none` + tone |
+| Hero container | `grid gap-6 px-4.5 pt-4 pb-5 min-[861px]:grid-cols-[minmax(0,auto)_minmax(0,1fr)] min-[861px]:items-center min-[861px]:gap-10` |
+| Hero label | `Typography variant="label-base" weight="medium"` + `block text-muted-foreground` |
+| Hero row | `mt-2.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5` |
+| Hero balance | `variant="display-2xl" weight="black"` + `leading-none whitespace-nowrap text-foreground` (**never** toned) |
+| Hero delta | `variant="h3" weight="black"` + `leading-none whitespace-nowrap` + `text-up`/`text-down` |
+| Hero note | `variant="body-sm" className="mt-2.5 text-subtle-foreground"` |
+| Spark box | `h-22 w-full` (fixed — `ResponsiveContainer` collapses to zero in an auto-height box) |
+| Spark caption | `variant="body-sm" className="mt-1 block text-right text-subtle-foreground"` |
+| KPI grid | `grid grid-cols-1 gap-4 min-[601px]:grid-cols-2 min-[1181px]:grid-cols-4` |
 
 **Pattern notes:**
 
+- **One figure wins the page.** The balance is the only `display-2xl` in the cockpit; everything else
+  on `/dashboard` is support. The panel previously showed eight figures at near-equal weight (4 strip
+  cells + 4 tiles), which gave the eye no entry point — fatal for a 30-second check. If a new figure
+  "deserves" display size, it doesn't: put it in the KPI row.
+- **The number and its shape travel together.** `AccountHero` pairs the balance with `EquitySpark`
+  because the figure alone answers "am I up" but not "am I climbing or bleeding back" — $1,166 reads
+  identically at the top of a rally and halfway down a drawdown. Both questions, one look.
+- **`EquitySpark` is chrome-free on purpose** — no axes, grid, tooltip or dots. It is not the
+  Analytics equity curve in miniature; at 88px tall any furniture is noise. The full curve with axes
+  and tooltips lives on `/analytics`.
+- **The spark's YAxis is `domain={["auto","auto"]}`, and this is load-bearing.** recharts defaults a
+  `YAxis` to `[0, dataMax]`, which renders a $900–$1,200 history as a dead flat line pinned to the top
+  edge — the exact opposite of what a sparkline is for. The axis is hidden but still governs shape.
+  **The `/analytics` equity curve still has this bug** (see build-plan.md → Phase 4).
+- **Six support figures became four.** Best and Worst Trade are trivia on a glance. Four cards also
+  divide a 12-column grid cleanly where six never did.
+- **The balance is uncoloured; the delta carries the sign.** A balance is a *level*, the delta is the
+  *judgement*. See ui-rules.md → Color & Type Usage. `AccountCard` follows the same rule.
+- **Baseline alignment, not centre.** `items-baseline` sits the delta on the balance's baseline; with
+  `items-center` it floats against the cap height and reads as a detached chip.
+- **One column, never two.** The old layout used Panel's `aside` prop for a `1.25fr/0.75fr` grid whose
+  columns could not agree on height, leaving a permanent void under the shorter one. Stacking hero
+  over strip removes the void *by construction*. `Panel`'s `aside` prop still exists but the overview
+  no longer uses it.
 - **Tone rules beyond plain sign.** Max Drawdown is **always `text-down`** (a drawdown is a loss
   figure even when small); Profit Factor is **`text-info`** (a ratio has no direction to colour); Win
   Rate is **`text-warning`** below 50% rather than red (a coin flip is not a loss). Everything else
   follows `>= 0 → up`, `< 0 → down`.
-- **The tile's 3px left bar uses `bg-info`, not the P&L colour** — it is the design's tile signature
-  and follows the accent theme.
-- **Strip values size with `cqi`, not `vw`.** The design uses `clamp(22px, 3vw, 34px)`, but `3vw`
-  tracks the viewport while the value sits in a cell an eighth as wide: at 1440 its own `$1,166.40`
-  renders 169px inside a 133px cell and collides with the neighbour. Each cell is a `@container` and
-  the value clamps on `19cqi`, so it still reaches the design's 34px cap on wide screens (verified:
-  25px @1440, 34px @1920, zero overflow at both).
-- **The strip stays 4-across down to 780px**, even though the overview itself stacks at 1180px.
-  Avoid mixing named breakpoints with arbitrary `min-[]` ones on the same property — Tailwind's sort
-  order between them is not intuitive, and `md:grid-cols-2` silently beat `min-[1181px]:grid-cols-4`.
-- Panel gets the two-column layout via its **`aside`** prop (header + strip left, market board right);
-  `children` render unpadded in that mode because the strip is full-bleed.
+- **The strip reads `TONE_CLASS` imported from `Tile.tsx`** rather than keeping its own tone→colour
+  map. One vocabulary, one source; a second copy would drift.
+- **Never mix named breakpoints with arbitrary `min-[]` ones on the same property.** Tailwind's sort
+  order between the two families is not intuitive: `md:grid-cols-3` silently beat
+  `min-[1181px]:grid-cols-6` and the strip rendered 3×2 at 1440. All three column counts now use
+  `min-[]`. (This bit the account strip once before with `md:grid-cols-2` vs `min-[1181px]:grid-cols-4`
+  — it is the single most repeated trap in this codebase.)
+- **Verified in a browser at 1440 / 900 / 600:** 6 / 3 / 2 columns, hero holds, zero console errors.
 
 ### Built — the stats grid *(imprinted 2026-07-16)*
 
@@ -221,11 +376,176 @@ Files: `components/stats/Stats.tsx` · rows from `lib/stat-rows.ts`
   `NEUTRAL_LABELS` → neutral · else up. A value containing `-` is down.
 - **`auto-fit` sizes the grid, not breakpoints** — it reflows on its own (5 columns at 1440).
 
+### Built — FilterChips, the scope control *(imprinted 2026-07-16)*
+
+File: `components/filters/FilterChips.tsx` · pure helpers in `lib/filters.ts`
+
+| Property | Class |
+| -------- | ----- |
+| Bar | `flex flex-wrap items-center gap-x-6 gap-y-3`, wrapped by the page in `border-b border-border pb-4.5` |
+| Group label | `Typography variant="label-sm" weight="semibold"` + `mr-1 tracking-wider text-subtle-foreground uppercase` |
+| Chip | `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-body-sm font-semibold transition-colors` |
+| Chip (active) | `bg-primary text-primary-fg` + `aria-pressed="true"` |
+| Chip (idle) | `bg-surface-wash text-muted-foreground hover:bg-surface-raised hover:text-foreground` |
+| Chip focus | `focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none` |
+
+**Pattern notes:**
+
+- **Two independent axes, not one preset list.** Time period writes only `from`/`to`; result writes
+  only `result`/`direction`. The old `presetFilters` rebuilt *every* field from a clean slate, so
+  picking "Last 7 days" silently discarded "Winners" — you could never ask "how did my winners do this
+  week", which is the question a journal exists to answer. **Verified:** 18 → Winners 9 → +7 days 4,
+  with both chips still lit.
+- **`presetFilters` still exists** for the six legacy preset chips and is still covered by
+  `scripts/verify-metrics.ts`. `periodRange` / `activePeriod` / `activeResult` are the new orthogonal
+  path. Don't route chips back through `presetFilters`.
+- **Windows clamp to the account's own history** — a 30-day window over 8 days of trades is just "all
+  time". `activePeriod` therefore tests `all` **before** the fixed windows, so the honest label wins;
+  reporting "30 days" would imply a boundary the data doesn't have.
+- **Active state is `aria-pressed`, not colour alone.** A toggle whose only "chosen" signal is a fill
+  says nothing to a screen reader.
+- **Chips render on the pages they scope** (Analytics, Trades, Calendar) and never in the nav —
+  Filters is a control, not a destination.
+
+### Built — the trades ledger *(imprinted 2026-07-16)*
+
+File: `components/trades/TradesTable.tsx` · `components/overview/RecentTrades.tsx`
+
+| Property | Class |
+| -------- | ----- |
+| Table | shadcn `Table` + `min-w-200` (ledger) / `min-w-160` (recent). The primitive owns the `overflow-x-auto` container |
+| `th` | `text-label-sm font-semibold tracking-wider text-subtle-foreground uppercase` |
+| Row | `border-border hover:bg-surface-wash` |
+| Numeric cell | `text-right tabular-nums` — **always** `tabular-nums` so digits align column-wise |
+| P&L cell | `text-right font-bold tabular-nums` + `text-up`/`text-down` by sign, with an explicit `+` |
+| Side cell | `font-semibold` + LONG `text-up` · SHORT `text-info` · LIQUIDATION `text-down` |
+| Empty state | `m-4.5 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface-wash-soft px-6 py-12 text-center` + icon + message + **recovery action** |
+| Row actions cell *(2026-07-17)* | `flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100`; `Button variant="ghost" size="icon"`; delete adds `text-subtle-foreground hover:text-down`. Row gains `group`; `th` is `<span className="sr-only">Actions</span>` |
+| Footer | `flex items-center justify-between gap-4 border-t border-border p-4.5` — live count + Load more |
+
+**Pattern notes:**
+
+- **`tabular-nums` on every numeric column.** Inter's proportional digits make `1` narrower than `8`,
+  so a column of money jitters and can't be scanned vertically. This is the whole reason a ledger
+  reads as a ledger.
+- **Empty states carry the way out.** With filters applied, "no trades" is nearly always a filter
+  problem, so the fix (`Clear filters` → `reset()`) sits where the user hits the wall. A dead-end
+  empty state makes the user hunt for the control that trapped them.
+- **Two empty states, because they have two different exits** *(2026-07-17)*. `allTrades.length === 0`
+  is an untouched journal → `Receipt` icon + **Add trade**. `filtered.length === 0` with trades present
+  is a filter problem → `SlidersHorizontal` + **Clear filters**. Offering "Clear filters" to someone
+  who has never added a trade sends them hunting for a control that was never the obstacle. Check
+  `allTrades` **first** — it is the more specific case.
+- **Hover-revealed row actions must still be reachable without hover** *(2026-07-17)*. `group-hover`
+  alone hides them from keyboard and touch entirely; `focus-within:opacity-100` brings them back while
+  tabbing and `max-md:opacity-100` keeps them permanent on touch. Each button carries an
+  `aria-label` naming the trade ("Delete BTCUSD trade from 2026-07-15") — nine identical "Delete"
+  buttons are useless in a screen-reader's element list.
+- **One dialog per table, not per row.** `TradesTable` holds `editing: EnrichedTrade | undefined` and
+  mounts a single `TradeFormDialog`; a dialog inside `Row` would mount one per visible row.
+- **Deleting is confirmed** via the imperative `confirm()` store, and the copy states the real
+  consequence — the running balance of every later trade shifts, because `balanceAfter` is cumulative.
+- **`Load more` reveals 24 at a time** and the footer always states `Showing N of M`, so paging never
+  hides how much is left.
+- **`RecentTrades` is the glance's 6 rows, `TradesTable` is the ledger.** Both read `useCockpit()`, so
+  they cannot disagree about the active view.
+
+### Built — the performance calendar *(built 2026-07-17; redesigned same day against the TradeFXBook "Monthly P&L" reference)*
+
+Files: `components/calendar/CalendarHeatmap.tsx` · pure builder in `lib/calendar.ts`
+
+**Structure: month → weeks → days.** Not a flat day list. The week is a real row object carrying its
+own net and traded-day count, because the weekly column cannot be derived at render time from cells
+that do not know which row they are in.
+
+| Property | Class |
+| -------- | ----- |
+| Scroller | `overflow-x-auto p-4.5 pt-3` wrapping `min-w-215` (860px) — below that eight columns crush |
+| Grid | `grid gap-1.5` + `grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,0.8fr)]` — 7 days + the week column, which is narrower because it is support, not a day |
+| Weekday head | `Typography variant="label-sm" weight="semibold"` + `pb-1 text-center tracking-wider text-subtle-foreground uppercase`, `aria-hidden`. **Mon→Sun** from `WEEKDAY_LABELS` |
+| Day cell | `flex min-h-17 flex-col rounded-lg border p-1.5` — 68px, the floor for three lines (date / figure / count) without clipping |
+| Day (signed) | inline `color-mix` bg + border on `--color-up`/`--color-down`; `border-transparent` |
+| Day (breakeven) | `border-border-soft bg-surface-well`, figure `text-muted-foreground` |
+| Day (no trades) | `border-border-tile bg-surface-well-soft`, date `text-subtle-foreground`, no figure |
+| Day (out of window) | `opacity-35` |
+| Day (today) | `ring-1 ring-primary/70` + date `text-primary` + a `size-1 rounded-full bg-primary` dot |
+| Padding slot | `<div aria-hidden />` — **no box at all** outside the month |
+| Date number | `variant="label-base" weight="semibold"` + `tabular-nums` |
+| Day figure | `variant="body-sm" weight="black"` + `truncate tabular-nums` + signed colour, `formatCompactMoney` |
+| Day count | `variant="caption"` + `truncate text-subtle-foreground` (`N trades`) |
+| Week cell | `flex min-h-17 flex-col justify-center gap-0.5 rounded-lg border border-border-soft bg-surface-well px-2 py-1.5 text-center`; dead week adds `opacity-45` |
+| Month nav | Panel `action`: signed month net (`variant="h4" weight="black"`) + traded-day count over `‹ label ›` ghost icon buttons, `min-w-30` label box |
+
+**Tint scale** (`FILL` 10→52%, `EDGE` 24→74%, via `tintPercent(strength, floor, ceiling)`):
+`strength = |day P&L| / max |day P&L|` across the **whole view**, linear.
+
+**Pattern notes:**
+
+- **The week runs Monday→Sunday.** A trading week is Mon-Fri; a Sunday-first grid splits the weekend
+  across both ends of the row and puts the quietest days either side of the week it is meant to frame.
+  `mondayIndex()` = `(getUTCDay() + 6) % 7`. **`DAY_NAMES` in `metrics.ts` stays Sunday-based** — it
+  indexes `weekdayPnl` off `getUTCDay()` and must not be reordered; `WEEKDAY_LABELS` in `calendar.ts`
+  is the display-order list. Two lists, two jobs.
+- **Weekday heads are written out (`Mon`), not single letters.** The reference's `M T W T F S S` has
+  two `T`s and two `S`s, so its own header can only be read by counting columns.
+- **The nav pages, it does not scope.** The arrows only move between months the filter already
+  selected, so the nav can never show a month the chips excluded — `FilterChips` stays the page's
+  single source of scope (ui-rules.md → Layout). Both arrows disable on a single-month range.
+- **The nav pins the month *key*, not an index.** A filter change rebuilds the range, and an index
+  would silently point at a different month; a key that no longer exists falls back to the newest,
+  which is the month a trader wants anyway.
+- **Today comes from `useSyncExternalStore` with a `null` server snapshot**, never `new Date()` in
+  render (hydration desyncs when a render straddles UTC midnight) and never `setState` in an effect
+  (double render, and `react-hooks/set-state-in-effect` rejects it). `useTodayKey()` declares what the
+  server should see instead of patching it afterwards. `subscribe` must live at **module scope** or
+  React re-subscribes every render; the snapshot may return a fresh **string** (compared by
+  `Object.is`) but never a fresh object, which would loop forever. **This is the pattern for any
+  client-only value** — prefer it to the `AccentSwitcher`'s older effect-based `localStorage` read.
+- **Padding slots render nothing.** A bordered empty cell reads as a day that exists and did nothing;
+  and padding with the neighbouring month's dates invites reading their P&L into this month's total.
+- **One tint scale across the whole view**, never per-month. Per-month scales would paint a $12 day in
+  a quiet month the same green as a $140 day in a loud one, which is the exact comparison the tint
+  exists to make.
+- **The alpha floor is load-bearing.** A $2 day scaled linearly against a $140 day lands near 0% and
+  renders as an untraded cell — the quietest traded day would silently claim the trader took the day
+  off. `FILL.floor` buys that distinction back.
+- **Four states, because they are four different facts:** outside the filter window (dimmed), no
+  trades (plain), traded flat ($0.00, neutral), traded up/down (tinted). A breakeven day and a day off
+  are not the same thing, and merging them misreports one as the other.
+- **The trade count is on the cell, not just the tooltip.** One bad trade is variance, six is a bad
+  day; `-$76` alone cannot tell them apart and the tint certainly cannot.
+- **`min-h-17` (68px) is the floor, not a preference** *(shortened 2026-07-17)*. Day and week cells
+  must carry three lines — date, figure, count — and the grid is 5-6 rows, so the panel is ~6× the
+  cell height: every 4px on a cell costs ~24px of page. Cut below 68px and the count clips. Both cells
+  share the value because a grid row sizes to its tallest child; changing one alone does nothing.
+- **Not `role="grid"`.** ARIA grid semantics need a row structure this CSS grid does not have, and a
+  half-declared grid reads *worse* than none. Each cell carries a `title` naming its date, trade count
+  and exact P&L — the tint and the compact figure are both approximations, so the precise number lives
+  there.
+- **P&L reads `metrics.dailyPnl`**, not a second grouping of the trade set. A second source of the same
+  number is free to drift from the charts by a rounding step. Only the per-day trade *count* (for the
+  cell and its title) is derived from `filtered`.
+- **With `Winners` lit the calendar tints winners only** — days holding only losers fall back to
+  untraded cells. That is the filtered set doing its job ("how did my winners land across the month"),
+  consistent with every other panel, not a bug.
+- **Verified:** `npx tsx scripts/verify-calendar.ts` — 26 checks incl. calendar total == net ==
+  `166.40`, every week's net == the days above it, every cell's column against an independently
+  derived `(getUTCDay()+6)%7`, and no day rendered twice. Browser at 1440/900/600: July 2026 starts
+  under **Wed** with 2 leading blanks, week rows read `+$46.1 (3 days)` / `+$120.3 (2 days)`, 7 days →
+  month `+$36.57` and that week flips to `-$83.7`, zero console errors.
+- **The nav is verified against a real multi-month range** *(2026-07-17)*. A hand-added trade on
+  2026-05-18 stretched the dev journal to May→July, so the paging was finally exercisable: opens on
+  July (newest, `3 of 3`, next disabled) → prev → **June `+$0.00`** (an empty month inside the range,
+  rendered rather than skipped) → prev → **May `+$36.00`** (prev disabled at the first month). The
+  key-not-index fallback holds: pinned on May, clicking **7 days** collapses the range to July alone
+  and the view falls back to July instead of blanking. May's `$36` day also renders visibly fainter
+  than July's `$196` — the shared tint scale working across months, which a per-month scale would
+  have flattened to identical greens.
+
 ### Target — not built yet
 | **InsightCard / AssetCard** | label + big value + note; AssetCard adds a **proportional bar** (`asset-bar` track + fill width `--w:${pct}%` and `--bar` = up/down color via inline `style`). |
 | **SideBadge** | LONG → `up`/green, SHORT → blue (`#9dbbff` token), LIQUIDATION → `down`/red. `rounded-full` pill, `text-caption font-black uppercase`. |
 | **ResultBadge** | Profit → green (`bg-up`), Loss → red (`bg-down`), Breakeven → neutral grey. Same pill shape. |
-| **CalendarHeatmap** | 7-col weekday grid; leading empty cells for the first weekday; each day tinted by P&L intensity (`profit`/`loss` bg + border alpha scaled by `--strength`); date + compact P&L (signed color). `overflow-x-auto`, `min-w-[780px]`. |
 | **TradesTable** | shadcn `Table` in an `overflow-x-auto` wrapper (`min-w-[880px]`): sticky `th` (uppercase muted), hover rows, `SideBadge`/`ResultBadge` cells, signed P&L + running-balance coloring, **Load More** (24-row step) + live count. |
 | **FilterBar** | `filters` grid (search + 4 selects + from/to date + min/max P&L + sort) + preset **chips** row. `"use client"`; changing any control recomputes the dashboard and clears active chips; Reset restores defaults. |
 | **Chart wrappers** | seven recharts charts (see below), each `"use client"` + dynamically imported (`ssr:false`) inside a Panel `chart-body`. The fixed height is required: `ResponsiveContainer` collapses to zero inside an auto-height box. |
@@ -247,10 +567,14 @@ Chart defaults (grid `rgba(255,255,255,.055)`, tick `--muted`, tooltip on `--sur
 
 ---
 
-## Form pattern (RHF + Zod + Field + toast)
+## Form pattern (RHF + Zod + Field + toast) *(built 2026-07-17 — add/edit-trade + settings)*
 
-The project's **one form shape** — the target for **add-trade**, **edit-trade**, and
-**account-settings**. Build every new form to match.
+The project's **one form shape**. Realised by `TradeFormDialog` (add + edit) and `SettingsPage`.
+Build every new form to match.
+
+Files: `features/dashboard/components/trades/TradeFormDialog.tsx` ·
+`features/dashboard/components/SettingsPage.tsx` ·
+`features/dashboard/schemas/trade.schema.ts` · `features/dashboard/schemas/settings.schema.ts`
 
 | Property | Class |
 | -------- | ----- |
@@ -267,6 +591,26 @@ feature's `schemas/*.schema.ts` is the single source of truth. **Inline field er
 `Field`. **Submit/API feedback goes to a toast**, not an inline banner. `noValidate` on the `<form>`;
 inputs set `aria-invalid` from the field error. Numeric trade fields coerce/validate as numbers;
 `side` validates against the `TradeSide` enum.
+
+**As built — decisions worth keeping:**
+
+- **The client schema mirrors the API DTO; it does not replace it.** Duplicating the rules turns a 400
+  round trip into an instant inline message, but the DTO stays the real guard — the API is open, so it
+  can never trust the client.
+- **Money is validated on the decimal *string*, not with modulo.** `1000.1 * 100` is
+  `100010.00000000001` in binary floating point, so `n * 100 % 1 === 0` rejects a valid figure.
+- **Optional number inputs use `z.union([z.literal(""), money()])`.** An empty input yields `""`,
+  which must mean *unset*, not `0` — coercing it to 0 would silently write a real number.
+- **`values`, not `defaultValues`.** The dialog is mounted once for the whole table, so opening it on
+  a different row must re-seed it; `defaultValues` would show the previous trade's numbers.
+- **`datetime-local` is treated as UTC** (`new Date(\`${local}:00Z\`)`). The app reads every timestamp
+  with UTC accessors so hour/weekday buckets are stable for all viewers — the same anchoring the seed
+  does. Parsing in the browser's zone would shift a trade into a different hour bucket.
+- **Submit is `w-full mt-2` on the settings page, but the dialog uses `DialogFooter`** (Cancel +
+  Save). A full-width submit inside a footer would fight the dialog's own two-button rhythm — the
+  documented deviation.
+- **`toast.loading` → `toast.success`/`toast.error` reuse the same `id`**, so the pending toast is
+  *replaced*, never stacked beneath its own result.
 
 ### Form card
 
@@ -321,7 +665,7 @@ token classes — never hex or raw Tailwind colors.
 
 | Property | Correct class |
 | -------- | ------------- |
-| Page background | `bg-background` (`#05070b`) + the global grid |
+| Page background | `bg-background` (`#05070b`) + the global diagonal wash (no grid — removed 2026-07-17) |
 | Panel / card background | `bg-surface` / `bg-card` (`#0b1018`) with the white-overlay gradient |
 | Raised tile / well | `bg-surface-raised` (`#101722`) · deepest `bg-black/16–22` |
 | Panel / tile border | `border border-border` (`rgba(255,255,255,.09)`) |

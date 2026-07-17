@@ -90,7 +90,7 @@ tooltip, dropdown-menu, …), styled with `class-variance-authority` for variant
 - Utilities are generated from `--color-*`, `--text-*`, `--radius`, and `--font-*` variables (e.g.
   `bg-surface`, `text-foreground`, `border-border`, `text-up`/`text-down`, `text-h2`, `font-sans`).
 - **Style with utilities only — no hand-written CSS files / CSS modules** for components. Sanctioned
-  inline-`style` exceptions (via `var(--color-*)`): panel/brand gradients, the app background grid,
+  inline-`style` exceptions (via `var(--color-*)`): panel/brand gradients, the app background wash,
   and P&L-proportional bar/heatmap widths.
 - For conditional/merged classes use the `cn` helper from `@lib/utils`. Never concatenate class
   strings by hand.

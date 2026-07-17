@@ -23,10 +23,14 @@ validation and persistence. Secrets live only on the backend.
 > no user identity, and no per-user ownership scoping. The API is open, which means it is intended
 > for **local/personal use** and is **not safe to expose publicly as-is**.
 
-> **Design source of truth:** `frontend/context/designs/website.index.html` is the reference build
-> for the dashboard — the dark theme, the sidebar + topbar shell, the overview strip, the filters,
-> the 27 stat cards, the seven charts, the insights/leaderboard, the calendar heatmap, and
-> the trades table. The context docs describe how to reproduce that design in the Next.js stack.
+> **Design reference (not source of truth):** `frontend/context/designs/website.index.html` was the
+> original reference build, and the dataset, metric set and section inventory still come from it.
+> **It is now a wireframe, not a spec.** The UI/UX is designed deliberately against the product's job
+> — see ui-rules.md for the current system. Where the design and good design disagree, the design
+> loses, and the deviation is recorded in progress-tracker.md → Decisions Made During Build.
+>
+> What survives from it unconditionally: **dark-only**, **Inter-only**, the **green-up / red-down**
+> P&L colour language, and the palette → semantic → utility token spine.
 
 ---
 
@@ -123,6 +127,9 @@ Export the filtered set to CSV · Copy a text summary · Switch accent theme
   hand-check against the trade log.
 - Data is scoped to the **active account** (not to a user — there are no users). Because the API is
   unauthenticated, the app stays a **local/personal** tool and is not exposed publicly as-is.
-- The UI matches the design: dark theme, semantic P&L color language (green up / red down), Inter
-  type, 8px radius, and the switchable accent.
+- **The dashboard answers the 30-second check.** A trader opens `/dashboard` after a session and knows
+  where they stand and which way they moved without scrolling, reading a legend, or parsing a grid.
+  Depth is a route away (`/analytics`), not a scroll away.
+- The UI is coherent and deliberate: dark theme, semantic P&L color language (green up / red down),
+  Inter type, one switchable accent, and a single figure carrying the hierarchy on each page.
 - Export CSV and Copy Summary reflect exactly the currently filtered set.

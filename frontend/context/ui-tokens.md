@@ -150,9 +150,21 @@ color class and dropped).
 
 ## Radius
 
-`--radius: 0.5rem` (**8px**). shadcn derives `rounded-sm/md/lg/xl` from it. Panels, cards, inputs,
-buttons all use the 8px family; badges/pills use `rounded-full`. Use the `rounded-*` utilities, not
-arbitrary pixel radii.
+`--radius: 0.75rem` (**12px**). shadcn derives the rest: `rounded-sm` 8 · `rounded-md` 10 ·
+`rounded-lg` 12 · `rounded-xl` 16. Badges/pills use `rounded-full`. Use the `rounded-*` utilities,
+never arbitrary pixel radii.
+
+| Element | Radius |
+| ------- | ------ |
+| Panels, KPI cards, icon plates | `rounded-xl` (16px) |
+| Nav items, inputs, buttons, wells | `rounded-lg` (12px) |
+| Badges, pills, theme dots | `rounded-full` |
+
+> **Why it moved from 8px:** 8px on a data-dense dark UI reads as cramped — corners tight enough that
+> panels look like boxes rather than surfaces. The reference builds
+> (`context/designs/app.tradefxbook.com_*.png`) sit near 16px on cards and 10-12px on controls, which
+> is what lets them breathe. Raising `--radius` moved the whole derived family at once, so nothing
+> needed a hardcoded radius.
 
 ---
 
@@ -164,8 +176,11 @@ arbitrary pixel radii.
   `var(--color-*)` when a utility doesn't fit.
 - **Shadow:** `--shadow: 0 18px 45px rgba(0,0,0,.38)` for raised panels, the account card, dialogs,
   and toasts. Expose as `shadow-panel`.
-- **App background grid:** the body carries a faint 42px dotted/line grid over a dark diagonal
-  gradient (design `body` background) — a single global style on the app shell, not per-component.
+- **App background:** the body carries a dark diagonal gradient wash (`ink-950 → ink-940 → ink-975`)
+  — a single global rule in `globals.css`, not per-component. **The faint 42px grid over it was
+  removed** *(2026-07-17)*: on a data screen its texture competed with the panels' hairline borders
+  for the same faint white, and those borders are the signal the layout actually relies on. The
+  `--color-grid-line` token went with it.
 
 ---
 

@@ -10,6 +10,12 @@ export type SortBy = "newest" | "oldest" | "highest" | "lowest" | "asset";
 export type Preset = "all" | "today" | "last7" | "profit" | "loss" | "liquidation";
 
 /**
+ * A time-period chip. Independent of the result chips: a period sets only the
+ * date window, so "30 days" and "Winners" can both be active at once.
+ */
+export type Period = "today" | "7d" | "30d" | "all";
+
+/**
  * The active view. Every cockpit panel recomputes from the set these select,
  * which is what keeps the overview, stats, charts and table in agreement.
  */

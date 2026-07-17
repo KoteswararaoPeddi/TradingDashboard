@@ -36,6 +36,14 @@ export function formatPercent(value: number, digits = 2): string {
 }
 
 /**
+ * "36.5" — the distance price travelled, to one decimal. Unsigned: a distance
+ * has no direction, and the Type and P&L columns already carry that.
+ */
+export function formatPips(value: number): string {
+  return value.toFixed(1);
+}
+
+/**
  * "1.53", or "INF" when the profit factor is unbounded (no losing trades).
  * metrics.ts models that case as null rather than Infinity.
  */
@@ -50,4 +58,20 @@ export function formatProfitFactor(value: number | null): string {
  */
 export function formatTimestamp(iso: string): string {
   return iso.replace("T", " ").replace(/\.\d+Z$/, "").replace("Z", "");
+}
+
+/**
+ * "15-07-2026" — the display form of a date.
+ *
+ * The ISO date is sliced out of the string rather than parsed through `Date`:
+ * `new Date(iso)` re-projects the instant into the viewer's zone, so a trade
+ * closed at 23:30 UTC would show the next day's date in Sydney and the previous
+ * day's in Los Angeles, disagreeing with the UTC day the charts bucket it into.
+ *
+ * Display only. Anything sorted, grouped or compared keeps the raw ISO string,
+ * which orders correctly as text; "DD-MM-YYYY" does not.
+ */
+export function formatDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}-${m}-${y}`;
 }

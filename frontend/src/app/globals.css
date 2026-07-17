@@ -19,24 +19,20 @@
     @apply font-sans;
   }
 
-  /* The app background: a faint 42px grid over a dark diagonal wash.
-     One global rule (per the design's body), never repeated per component. */
+  /* The app background: a dark diagonal wash, and nothing else.
+     One global rule (per the design's body), never repeated per component.
+     The 42px grid that used to sit over this was removed — on a data screen its
+     texture competed with the panels' own hairline borders for the same faint
+     white, which is the one signal the layout actually uses to separate things. */
   body {
     @apply overflow-x-hidden bg-background text-foreground;
     min-height: 100vh;
-    background-image:
-      linear-gradient(var(--color-grid-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px),
-      linear-gradient(
-        135deg,
-        var(--color-ink-950) 0%,
-        var(--color-ink-940) 42%,
-        var(--color-ink-975) 100%
-      );
-    background-size:
-      42px 42px,
-      42px 42px,
-      auto;
+    background-image: linear-gradient(
+      135deg,
+      var(--color-ink-950) 0%,
+      var(--color-ink-940) 42%,
+      var(--color-ink-975) 100%
+    );
   }
 
   /* Dark scrollbars, so the chrome matches the cockpit rather than the OS. */

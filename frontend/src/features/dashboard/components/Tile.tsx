@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 import { Typography } from "@components/ui/typography";
 import { cn } from "@lib/utils";
 
@@ -8,7 +10,12 @@ import { cn } from "@lib/utils";
  */
 export type Tone = "up" | "down" | "info" | "warning" | "neutral";
 
-const TONE_CLASS: Record<Tone, string> = {
+/**
+ * The one place a tone becomes a colour. Exported so figure surfaces that aren't
+ * tiles (the overview's support strip) read the same map instead of keeping a
+ * second copy that could drift.
+ */
+export const TONE_CLASS: Record<Tone, string> = {
   up: "text-up",
   down: "text-down",
   info: "text-info",
@@ -18,49 +25,74 @@ const TONE_CLASS: Record<Tone, string> = {
   neutral: "text-purple",
 };
 
+/**
+ * The icon plate's tint, per tone. A 10% wash of the tone's own hue behind the
+ * icon: it categorises the card at a glance without adding a sixth colour, and
+ * it reads at arm's length where a text colour does not.
+ */
+const TONE_PLATE_CLASS: Record<Tone, string> = {
+  up: "bg-up/10 text-up",
+  down: "bg-down/10 text-down",
+  info: "bg-info/10 text-info",
+  warning: "bg-warning/10 text-warning",
+  neutral: "bg-purple/10 text-purple",
+};
+
 interface Props {
   label: string;
   value: string;
   note: string;
   tone: Tone;
-  /** Adds the hover lift. The stats grid uses it; the market board doesn't. */
+  /** Optional glyph, shown on a tinted plate above the label. */
+  icon?: LucideIcon;
+  /** Adds the hover response. The stats grid uses it; the KPI row doesn't. */
   interactive?: boolean;
   className?: string;
 }
 
 /**
- * The cockpit's figure tile: uppercase label, big coloured value, muted note,
- * and the design's 3px left accent bar. Shared by the market board and the
- * stats grid so the two can never drift apart.
+ * The cockpit's figure card: an optional tinted icon plate, a quiet uppercase
+ * label, the figure, and a muted note.
+ *
+ * No accent bar. It was the reference cockpit's tile signature, but the stats
+ * grid renders 27 tiles — 27 identical bars carrying no information is texture
+ * competing with the only thing on the card worth reading.
  */
-export function Tile({ label, value, note, tone, interactive, className }: Props) {
+export function Tile({ label, value, note, tone, icon: Icon, interactive, className }: Props) {
   return (
     <article
       className={cn(
-        "relative min-h-30 overflow-hidden rounded-lg border border-border-tile bg-surface-tile p-4",
-        // The accent bar is the tile's signature; it tracks the theme, not the
-        // P&L colour, so it stays `info` whatever the figure says.
-        "before:absolute before:top-0 before:left-0 before:h-full before:w-0.75 before:bg-info before:content-['']",
-        interactive &&
-          "transition-all hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-raised/92",
+        "flex flex-col rounded-xl border border-border-tile bg-surface-tile p-5",
+        Icon ? "min-h-45" : "min-h-30",
+        interactive && "transition-colors hover:border-border-strong hover:bg-surface-raised/92",
         className,
       )}
     >
+      {Icon ? (
+        <span className={cn("mb-5 grid size-11 shrink-0 place-items-center rounded-xl", TONE_PLATE_CLASS[tone])}>
+          <Icon className="size-5" aria-hidden />
+        </span>
+      ) : null}
+
+      {/* Uppercase and muted, but at medium weight with tracking rather than 800.
+          A label set as heavy as its own value competes with it, and a grid of 27
+          such labels has no hierarchy at all. The label names the figure; the
+          figure is the point. */}
       <Typography
         as="span"
-        variant="label-base"
-        weight="extrabold"
-        className="block text-muted-foreground uppercase"
+        variant="label-sm"
+        weight="semibold"
+        className="block tracking-wider text-muted-foreground uppercase"
       >
         {label}
       </Typography>
 
       <Typography
         as="strong"
-        variant="h2"
+        variant={Icon ? "h1" : "h2"}
         weight="black"
         className={cn(
-          "mt-2.5 block leading-none",
+          "mt-2 block leading-none",
           // Long money strings must break rather than widen the grid track.
           "wrap-anywhere",
           TONE_CLASS[tone],
@@ -69,7 +101,7 @@ export function Tile({ label, value, note, tone, interactive, className }: Props
         {value}
       </Typography>
 
-      <Typography variant="body-sm" className="mt-2.5 text-muted-foreground">
+      <Typography variant="body-sm" className="mt-auto pt-3 text-subtle-foreground">
         {note}
       </Typography>
     </article>

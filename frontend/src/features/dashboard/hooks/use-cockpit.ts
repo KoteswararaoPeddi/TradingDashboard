@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo } from "react";
 
+import { useDashboardData } from "../components/DashboardProvider";
 import { filterTrades, tradeDateRange } from "../lib/filters";
 import { calculateMetrics } from "../lib/metrics";
-import { useDashboardStore } from "../stores/dashboard.store";
 import { useFiltersStore } from "../stores/filters.store";
 import type { TradeMetrics } from "../types/metrics.types";
 import type { EnrichedTrade, TradingAccount } from "../types/trade.types";
 
 interface Cockpit {
-  status: "idle" | "loading" | "ready" | "error";
+  status: "ready" | "error";
   error: string | null;
   account: TradingAccount | null;
   /** The account's whole trade set. */
@@ -30,10 +30,7 @@ interface Cockpit {
  * about the same trade set.
  */
 export function useCockpit(): Cockpit {
-  const status = useDashboardStore((s) => s.status);
-  const error = useDashboardStore((s) => s.error);
-  const account = useDashboardStore((s) => s.account);
-  const allTrades = useDashboardStore((s) => s.trades);
+  const { status, error, account, trades: allTrades } = useDashboardData();
 
   const filters = useFiltersStore((s) => s.filters);
   const initRange = useFiltersStore((s) => s.initRange);

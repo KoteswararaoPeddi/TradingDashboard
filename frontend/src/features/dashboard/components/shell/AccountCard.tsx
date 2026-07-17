@@ -11,24 +11,19 @@ interface Props {
    * filter narrows the panels on the right.
    */
   metrics: TradeMetrics;
-  startingBalance: number;
 }
 
 /** Pinned sidebar card: balance plus four at-a-glance account figures. */
-export function AccountCard({ metrics, startingBalance }: Props) {
+export function AccountCard({ metrics }: Props) {
   return (
     <div className="mt-auto rounded-lg border border-border bg-linear-to-b from-surface-wash to-surface-wash-soft p-4 shadow-panel">
       <Typography as="span" variant="label-base" weight="extrabold" className="block text-muted-foreground uppercase">
         Account Balance
       </Typography>
 
-      {/* h1 (30px) matches the design's .balance; display-lg would run 4px large. */}
-      <Typography
-        as="p"
-        variant="h1"
-        weight="black"
-        className={cn("mt-2", metrics.equity >= startingBalance ? "text-up" : "text-down")}
-      >
+      {/* Uncoloured, matching AccountHero: a balance is a level, not a signed
+          value. The Net P&L and Growth minis below carry the judgement. */}
+      <Typography as="p" variant="h1" weight="black" className="mt-2 text-foreground">
         {formatMoney(metrics.equity)}
       </Typography>
 

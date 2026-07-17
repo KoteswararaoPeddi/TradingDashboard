@@ -84,11 +84,11 @@
   --color-hairline-strong: rgb(255 255 255 / 0.16);
   --color-hairline-soft:   rgb(255 255 255 / 0.06);  /* inner wells               */
   --color-hairline-tile:   rgb(255 255 255 / 0.075); /* market/stat tiles         */
-  --color-grid-line:       rgb(255 255 255 / 0.025); /* app background grid       */
   --color-chart-grid:      rgb(255 255 255 / 0.055); /* chart cartesian grid      */
 
   /* --- Translucent surfaces layered over the ink ramp. Alpha rather than solid,
-     so the app's background grid stays faintly visible through every panel. --- */
+     so each panel reads as a lift off the background wash rather than a flat
+     patch of a different grey. --- */
   --color-wash-strong: rgb(255 255 255 / 0.058); /* panel wash start, nav hover  */
   --color-wash:        rgb(255 255 255 / 0.05);  /* quiet button / chip surface  */
   --color-wash-soft:   rgb(255 255 255 / 0.025); /* panel wash end, empty state  */
@@ -154,7 +154,12 @@
   --border-tile:   var(--color-hairline-tile);
   --input:         var(--color-ink-900);
   --ring:          var(--color-blue);
-  --radius:        0.5rem; /* 8px */
+  /* 12px. shadcn derives the rest: sm 8 / md 10 / lg 12 / xl 16.
+     8px on a data-dense dark UI reads as cramped — the corners are tight enough
+     that panels look like boxes rather than surfaces. The reference builds
+     (context/designs/app.tradefxbook.com_*.png) sit around 16px on cards and
+     10-12px on controls, which is what gives them room to breathe. */
+  --radius:        0.75rem;
 
   /* Text */
   --foreground:        var(--color-slate-50);
