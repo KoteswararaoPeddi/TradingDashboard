@@ -30,9 +30,11 @@ note. Feature composites are logged here as they are built.
 Record UI copy typos and other UI issues here: location (page/component + file), current
 (wrong) text, correct text, status.
 
-| # | Location (component / file) | Current text | Correct text | Status |
-| - | --------------------------- | ------------ | ------------ | ------ |
-| 1 | (none currently)            | —            | —            | —      |
+| # | Location (component / file) | Issue | Fix | Status |
+| - | --------------------------- | ----- | --- | ------ |
+| 1 | `calendar/DayCell.tsx` | Trade-count line used `text-subtle-foreground` (#667085) — near-invisible on the day's up/down colour tint | Changed to `text-foreground/70` (dimmed white reads on tinted, flat and dark cells) | Fixed 2026-07-17 |
+| 2 | `lib/filters.ts` `periodRange` | "Today" resolved to `range.to` (latest *traded* day, e.g. 15th), so the chip read "Today" while showing a different day | "Today"/"7 days"/"30 days" now anchor on the wall-clock day via `useTodayKey`; empty today shows an empty view honestly | Fixed 2026-07-17 |
+| 3 | `calendar/CalendarHeatmap.tsx` | On refresh the "No calendar data for the current filters" empty state flashed for a frame — the filter range seeds one frame after the server data paints, so `buildCalendarMonths` had no window and `!month` fell through to the empty state | Added `CalendarSkeleton`, gated on `!rangeSeeded` **before** the empty checks. Verified frame-by-frame: sequence is now `SKELETON → grid`, never `EMPTY → grid` | Fixed 2026-07-17 |
 
 ---
 
@@ -431,12 +433,20 @@ File: `components/filters/FilterChips.tsx` · pure helpers in `lib/filters.ts`
   picking "Last 7 days" silently discarded "Winners" — you could never ask "how did my winners do this
   week", which is the question a journal exists to answer. **Verified:** 18 → Winners 9 → +7 days 4,
   with both chips still lit.
-- **`presetFilters` still exists** for the six legacy preset chips and is still covered by
-  `scripts/verify-metrics.ts`. `periodRange` / `activePeriod` / `activeResult` are the new orthogonal
-  path. Don't route chips back through `presetFilters`.
-- **Windows clamp to the account's own history** — a 30-day window over 8 days of trades is just "all
-  time". `activePeriod` therefore tests `all` **before** the fixed windows, so the honest label wins;
-  reporting "30 days" would imply a boundary the data doesn't have.
+- **`presetFilters` still exists** but is **not wired to any UI** (no component calls
+  `applyPreset`). `periodRange` / `activePeriod` / `activeResult` are the live orthogonal path. Don't
+  route chips back through `presetFilters`.
+- **Time windows anchor on the wall-clock day (`useTodayKey`), not the latest traded day.** "Today"
+  means today; "7 days"/"30 days" end today. Earlier they anchored on `range.to` (the last day *with*
+  trades), which made "Today" read as the chip label while showing a different day — see Known Issues
+  #2. `today` is null on the server, so `periodRange`/`activePeriod` take it as an argument and fall
+  back to `range.to`; the default filter is "all", so that fallback is never the visible state on load.
+- **An empty "Today" is correct, not a bug.** If the current day has no trades, the view is empty and
+  the calendar shows the current month with today ringed-but-empty. Do not "fix" this by jumping to the
+  last traded day — that is the exact lie we removed.
+- **`from` still clamps to the account's first trade** — a 30-day window on 8 days of history starts at
+  the first trade, never 30 days before today. `to`, though, is now today, so "30 days" and "All time"
+  are distinct spans once today runs past the last trade.
 - **Active state is `aria-pressed`, not colour alone.** A toggle whose only "chosen" signal is a fill
   says nothing to a screen reader.
 - **Chips render on the pages they scope** (Analytics, Trades, Calendar) and never in the nav —
@@ -728,6 +738,15 @@ spacing) and swap each element for a `<Skeleton>` sized to it.
 | Stats | ~27 stat-card blocks in the `auto-fit` grid |
 | Charts | each chart body = one full-height `Skeleton` block |
 | Trades table | header row + N row skeletons at the real column widths |
+| Calendar (`CalendarSkeleton`) | 8 head chips + 5×8 cells at the real `h-17` in the same `min-w-215` / 8-col grid |
+
+**A "loading" frame is not an "empty" frame — order the branches so loading wins.** The calendar
+seeds its filter range one frame *after* the server data paints, so for that frame the grid has no
+window to build. Rendering the empty state there flashed "No calendar data for the current filters"
+on every refresh. The fix is a `!rangeSeeded` skeleton branch placed **before** either empty state, so
+an un-settled view can never read as a filtered-empty result. Verified frame-by-frame: `SKELETON →
+grid`, never `EMPTY → grid`. Any panel whose empty condition can also be true mid-initialisation needs
+the same ordering.
 
 ---
 

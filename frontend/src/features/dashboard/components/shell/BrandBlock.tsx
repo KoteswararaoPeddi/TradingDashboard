@@ -1,12 +1,7 @@
 import { Typography } from "@components/ui/typography";
 
-interface Props {
-  /** e.g. "Live Account #110920" — shown under the wordmark. */
-  accountLabel: string;
-}
-
-/** Sidebar brand: the TJ mark plus the wordmark and the active account. */
-export function BrandBlock({ accountLabel }: Props) {
+/** Sidebar brand: the TJ mark plus the wordmark. */
+export function BrandBlock() {
   return (
     <a
       href="#overview"
@@ -27,14 +22,6 @@ export function BrandBlock({ accountLabel }: Props) {
       <span className="min-w-0">
         <Typography as="span" variant="h4" weight="extrabold" className="block leading-tight">
           Trade Journal
-        </Typography>
-        <Typography
-          as="span"
-          variant="label-base"
-          weight="bold"
-          className="mt-1 block truncate text-muted-foreground uppercase"
-        >
-          {accountLabel}
         </Typography>
       </span>
     </a>

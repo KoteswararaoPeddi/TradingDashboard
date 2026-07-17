@@ -13,6 +13,7 @@ import { useTodayKey } from "../../hooks/useTodayKey";
 import { buildCalendarMonths, WEEKDAY_LABELS } from "../../lib/calendar";
 import { useFiltersStore } from "../../stores/filters.store";
 import { Panel } from "../Panel";
+import { CalendarSkeleton } from "./CalendarSkeleton";
 import { MonthNav } from "./MonthNav";
 import { WeekRow } from "./WeekRow";
 
@@ -36,6 +37,13 @@ export function CalendarHeatmap() {
   const range = useFiltersStore((s) => s.filters);
   const reset = useFiltersStore((s) => s.reset);
   const todayKey = useTodayKey();
+
+  // The filter store seeds its range from the analytics bundle in an effect, one
+  // frame after the server data is already on screen. Until then the window is
+  // `{"",""}` and the grid has nothing to build — that frame is *loading*, not an
+  // empty result, so it must not fall through to the "no data for this filter"
+  // empty state (the flash the user saw on every refresh).
+  const rangeSeeded = Boolean(range.from && range.to);
 
   const months = useMemo(
     () => (metrics ? buildCalendarMonths(metrics.dailyPnl, metrics.monthlyPnl, range) : []),
@@ -79,9 +87,13 @@ export function CalendarHeatmap() {
         ) : null
       }
     >
-      {/* Two empties with two different ways out, matching the ledger: an
-          untouched journal is not a filter problem. */}
-      {accountTradeCount === 0 ? (
+      {/* Order matters: the loading frame is caught before either empty state, so
+          a still-seeding range never reads as "no data". Two empties then follow,
+          with two different ways out — an untouched journal is not a filter
+          problem, so it does not offer "Clear filters". */}
+      {!rangeSeeded ? (
+        <CalendarSkeleton />
+      ) : accountTradeCount === 0 ? (
         <EmptyState
           className="m-4.5"
           icon={<CalendarRange className="size-7 text-subtle-foreground" aria-hidden />}

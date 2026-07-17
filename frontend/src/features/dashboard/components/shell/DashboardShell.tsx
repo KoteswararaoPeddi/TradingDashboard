@@ -23,8 +23,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   // panels on the right do that.
   const fullMetrics = initialAnalytics;
 
-  const accountLabel = account ? `${account.label} #${account.accountNumber}` : "No account";
-
   return (
     // Block flow below 1181px, grid above it — and that is what makes the nav
     // stick on mobile. A grid item's sticky containing block is its own **grid
@@ -34,7 +32,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen min-[1181px]:grid min-[1181px]:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]">
       {/* Design sidebar padding is 22px vertical / 18px horizontal. */}
       <aside className="sticky top-0 z-30 flex flex-col gap-5 border-b border-border bg-surface/88 px-4.5 py-5.5 backdrop-blur-lg min-[1181px]:h-screen min-[1181px]:border-r min-[1181px]:border-b-0">
-        <BrandBlock accountLabel={accountLabel} />
+        <BrandBlock />
 
         <div className="min-w-0">
           <Typography

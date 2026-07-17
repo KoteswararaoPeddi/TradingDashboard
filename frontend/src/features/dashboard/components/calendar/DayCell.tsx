@@ -86,8 +86,13 @@ export function DayCell({ day, today }: Props) {
             {formatCompactMoney(day.pnl ?? 0)}
           </Typography>
           {/* The count is what turns "-$76" into a story: one bad trade is
-              variance, six is a bad day, and the tint cannot tell them apart. */}
-          <Typography variant="caption" className="block truncate text-subtle-foreground">
+              variance, six is a bad day, and the tint cannot tell them apart.
+
+              `text-foreground/70`, not `text-subtle-foreground`: this line sits on
+              the day's colour tint (up/down at up to ~52% alpha), and the dark
+              slate `subtle-foreground` (#667085) all but vanishes on green or red.
+              Dimmed white reads on every cell state — tinted, flat, or dark. */}
+          <Typography variant="caption" weight="semibold" className="block truncate text-foreground/70">
             {day.trades} {day.trades === 1 ? "trade" : "trades"}
           </Typography>
         </div>

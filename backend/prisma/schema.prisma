@@ -30,11 +30,16 @@ enum TradeStatus {
 // Trading
 // ---------------------------------------------------------------------------
 
+// Money is `Decimal`, never `Float`. Binary floating point cannot represent 0.1,
+// and the equity curve is a *cumulative* sum — one rounding error per trade,
+// compounding for the life of the account. Postgres `numeric` is exact; Prisma
+// surfaces it as a decimal.js instance, so the arithmetic stays exact up to the
+// API boundary, where the entity mappers emit it as a fixed-scale value.
 model TradingAccount {
   id              String   @id @default(cuid())
   label           String
   accountNumber   String   @unique
-  startingBalance Float    @default(0)
+  startingBalance Decimal  @default(0) @db.Decimal(18, 2)
   currency        String   @default("USD")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -45,21 +50,28 @@ model TradingAccount {
 }
 
 model Trade {
-  id         String      @id @default(cuid())
-  accountId  String
-  symbol     String
-  side       TradeSide
-  size       String? // e.g. "1/1", "0.25/0.25" (requested/filled), free-form
-  entryPrice Float?
-  exitPrice  Float?
-  grossPnl   Float       @default(0)
-  netPnl     Float       @default(0)
-  fees       Float       @default(0)
-  openedAt   DateTime?
-  closedAt   DateTime
-  ticket     String?
-  status     TradeStatus @default(CLOSED)
-  createdAt  DateTime    @default(now())
+  id        String    @id @default(cuid())
+  accountId String
+  symbol    String
+  side      TradeSide
+  size      String? // e.g. "1/1", "0.25/0.25" (requested/filled), free-form
+
+  // Prices carry more scale than money: a forex major quotes to 5 decimals
+  // (1.08501) and crypto further, so cents would silently round a fill.
+  entryPrice Decimal? @db.Decimal(18, 8)
+  exitPrice  Decimal? @db.Decimal(18, 8)
+
+  // Money is scale-2 by definition — a P&L that is not a whole number of cents
+  // is not a P&L.
+  grossPnl Decimal @default(0) @db.Decimal(18, 2)
+  netPnl   Decimal @default(0) @db.Decimal(18, 2)
+  fees     Decimal @default(0) @db.Decimal(18, 2)
+
+  openedAt  DateTime?
+  closedAt  DateTime
+  ticket    String?
+  status    TradeStatus @default(CLOSED)
+  createdAt DateTime    @default(now())
 
   account TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 

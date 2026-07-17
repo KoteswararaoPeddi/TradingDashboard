@@ -8,26 +8,42 @@ import type { Period, Preset, ResultFilter, TradeFilters } from "../types/filter
  * days" and "Winners" combine, which `presetFilters` cannot express because it
  * rebuilds every field from a clean slate.
  *
- * Every window is anchored to the data's latest day, not the wall clock. The
- * journal is historical, so a real "today" would show an empty dashboard.
+ * "Today" means the wall-clock **current day** (`today`), not the latest day with
+ * trades. It used to resolve to `range.to` so the historical seed data never
+ * showed an empty screen — but that made the chip lie: it read "Today" while
+ * showing the last *traded* day (e.g. the 15th when today is the 17th). If today
+ * has no trades, an empty view is the correct answer, not a silent jump to
+ * whenever the account last traded.
+ *
+ * `today` is null on the server (the clock is not a pure render input, see
+ * `useTodayKey`). When it is null the "today" window falls back to `range.to`;
+ * the default filter is "all", so this fallback is never the visible state on
+ * load.
  */
-export function periodRange(period: Period, range: { from: string; to: string }): {
+export function periodRange(
+  period: Period,
+  range: { from: string; to: string },
+  today: string | null,
+): {
   from: string;
   to: string;
 } {
   if (!range.to) return { from: range.from, to: range.to };
   if (period === "all") return { from: range.from, to: range.to };
-  if (period === "today") return { from: range.to, to: range.to };
 
+  const now = today ?? range.to;
+  if (period === "today") return { from: now, to: now };
+
+  // "Last N days" ends today, not on the latest trade: the window is a span of
+  // the calendar, so a quiet stretch since the last trade still counts as recent.
   const days = period === "7d" ? 6 : 29;
-  const anchor = new Date(`${range.to}T00:00:00Z`);
+  const anchor = new Date(`${now}T00:00:00Z`);
   anchor.setUTCDate(anchor.getUTCDate() - days);
   const from = anchor.toISOString().slice(0, 10);
 
-  // Never widen past the account's own history: a 30-day window on 8 days of
-  // trades is just "all time", and pretending otherwise would let two chips
-  // claim to be active at once.
-  return { from: from < range.from ? range.from : from, to: range.to };
+  // Never start before the account's own history: a 30-day window on 8 days of
+  // trades begins at the first trade, not 30 days before today.
+  return { from: from < range.from ? range.from : from, to: now };
 }
 
 /**
@@ -48,11 +64,12 @@ export function periodRange(period: Period, range: { from: string; to: string })
 export function activePeriod(
   filters: TradeFilters,
   range: { from: string; to: string },
+  today: string | null,
 ): Period | null {
   const periods: Period[] = ["all", "today", "7d", "30d"];
   return (
     periods.find((period) => {
-      const { from, to } = periodRange(period, range);
+      const { from, to } = periodRange(period, range, today);
       return filters.from === from && filters.to === to;
     }) ?? null
   );

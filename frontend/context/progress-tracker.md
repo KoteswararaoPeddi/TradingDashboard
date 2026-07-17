@@ -329,8 +329,13 @@ See build-plan.md for the full per-phase breakdown.
 - **`profitFactor` is `number | null`, not `"INF"`.** With no losses the factor is unbounded; a null
   says so in the type instead of smuggling a string into a numeric field or rendering `Infinity`.
   The UI formats null as "INF" at the edge.
-- **"Today" means the latest day with trades**, not the wall-clock date. The dataset is historical, so
-  a real "today" preset would show an empty dashboard.
+- **"Today" means the wall-clock day, not the latest traded day** *(reversed 2026-07-17)*. It used to
+  resolve to `range.to` so the historical seed never showed an empty screen — but that made the chip
+  lie: it read "Today" while showing whenever the account last traded (the 15th when today is the
+  17th). Now "Today"/"7 days"/"30 days" anchor on `useTodayKey`; an empty today shows an empty view,
+  which is the honest answer. The clock is null on the server, so `periodRange`/`activePeriod` take it
+  as an argument and fall back to `range.to`; the default filter is "all", so that fallback is never
+  the visible state on load.
 - **Swagger over a REST client:** `@nestjs/swagger` generates the API docs from the DTOs and
   controller decorators, so the docs can't drift from the code the way a hand-kept Postman collection
   does. Cost: every endpoint carries `@Api*` decorators. Response examples must show the **wrapped**

@@ -3,8 +3,7 @@
 import { CheckCircle2, Layers, XCircle, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { cn } from "@lib/utils";
-
+import { useTodayKey } from "../../hooks/useTodayKey";
 import { activePeriod, activeResult, periodRange } from "../../lib/filters";
 import { useFiltersStore } from "../../stores/filters.store";
 import { FilterChip } from "./FilterChip";
@@ -42,8 +41,10 @@ export function FilterChips() {
   const filters = useFiltersStore((s) => s.filters);
   const range = useFiltersStore((s) => s.range);
   const setFilters = useFiltersStore((s) => s.setFilters);
+  // The wall-clock day so "Today"/"7 days" mean now, not the last traded day.
+  const today = useTodayKey();
 
-  const period = activePeriod(filters, range);
+  const period = activePeriod(filters, range, today);
   const result = activeResult(filters);
 
   return (
@@ -53,7 +54,7 @@ export function FilterChips() {
           <FilterChip
             key={item.id}
             active={period === item.id}
-            onClick={() => setFilters(periodRange(item.id, range))}
+            onClick={() => setFilters(periodRange(item.id, range, today))}
           >
             {item.label}
           </FilterChip>
