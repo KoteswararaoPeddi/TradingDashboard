@@ -381,6 +381,25 @@ See build-plan.md for the full per-phase breakdown.
   `localeCompare` and DD-MM-YYYY does not. `formatDate` slices the string rather than going through
   `new Date()`, which would re-project the instant into the viewer's timezone and disagree with the
   UTC day buckets the charts use.
+- **All analytics moved to the backend; the frontend is now a pure display layer** *(2026-07-17)*.
+  Measured client compute (`metrics.ts` + `filters.ts`) held up to ~1000 trades but janked by ~5000
+  (repeated ISO date parsing inside sort comparators, ~9.6ms at 1000). The chosen fix was not a local
+  optimization but the architecture the user wanted: `GET /analytics?<filters>` returns the ready-to-
+  render bundle, `GET /trades?page&limit&<filters>` returns a server-paginated page. The proven
+  `metrics.ts` logic was ported verbatim to `backend/modules/analytics/analytics.calculator.ts` +
+  `trades/trades.logic.ts` and pinned by `backend/test/analytics-oracle.ts` (the same 43 checks that
+  guarded the frontend — all green, then re-confirmed against live Prisma rows). Frontend `metrics.ts`
+  and the data-crunching half of `filters.ts` (`filterTrades`/`sortTrades`/`tradeDateRange`/
+  `tradeSymbols`) were **deleted**; the chip→param helpers stayed. First paint is still server-
+  rendered; filter changes refetch. See engineering/backend.md for the port and the Decimal-boundary
+  decision.
+- **Money is mid-migration Float→Decimal; coerced at every Prisma boundary** *(2026-07-17)*.
+  `schema.prisma` on disk still says `Float`, but the generated Prisma client types money as
+  `Decimal` (from a staged `money_float_to_decimal` migration), so Prisma returns `Decimal` at runtime.
+  `equity += pnl` on a Decimal would silently string-concatenate. `backend/common/money.ts`'s
+  `toNumber`/`toNullableNumber` normalise every money field on the way out of the DB (entities +
+  analytics/trades services). **Open:** `schema.prisma` and the generated client disagree — the user
+  needs to reconcile (regenerate to `Decimal @db.Decimal(18,2)` or revert the migration).
 
 ---
 

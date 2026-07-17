@@ -8,8 +8,7 @@ import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { Table, TableBody, TableHeader, TableRow } from "@components/ui/table";
 
-import { useCockpit } from "../../hooks/use-cockpit";
-import { pageSlice } from "../../lib/pagination";
+import { useTrades } from "../../hooks/use-trades";
 import { useFiltersStore } from "../../stores/filters.store";
 import type { EnrichedTrade } from "../../types/trade.types";
 import { Panel } from "../Panel";
@@ -18,27 +17,26 @@ import { TradeFormDialog } from "./TradeFormDialog";
 import { TradeRow } from "./TradeRow";
 import { TradesPagination } from "./TradesPagination";
 
-/** The full ledger for the active view. */
+/** Rows per page — matches the server's default page size. */
+const PAGE_SIZE = 50;
+
+/** The full ledger for the active view — one server-paginated page at a time. */
 export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
-  const { status, filtered, allTrades } = useCockpit();
   const reset = useFiltersStore((s) => s.reset);
   const filters = useFiltersStore((s) => s.filters);
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<EnrichedTrade | undefined>(undefined);
 
-  // A filter change re-scopes the set under the reader, so page 6 of the old view
-  // is meaningless in the new one — go back to page 1.
-  //
-  // Adjusted *during render*, not in an effect. An effect would paint page 6 of
-  // the new set first and correct it on the next frame, a visible flash of the
-  // wrong rows; React re-runs this component before touching the DOM, so nothing
-  // wrong is ever shown. (It is also what `react-hooks/set-state-in-effect` is
-  // steering toward.)
+  // A filter change re-scopes the set, so page 6 of the old view is meaningless in
+  // the new one — go back to page 1. Adjusted *during render*, not in an effect, so
+  // the wrong page is never painted then corrected on the next frame.
   const [prevFilters, setPrevFilters] = useState(filters);
   if (prevFilters !== filters) {
     setPrevFilters(filters);
     setPage(1);
   }
+
+  const { status, rows, total, totalPages, accountTradeCount } = useTrades(page, PAGE_SIZE);
 
   if (status !== "ready") {
     return (
@@ -52,20 +50,21 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
     );
   }
 
-  const slice = pageSlice(filtered, page);
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
 
   return (
     <Panel
       id="trades"
       title="Trade history"
-      description={`${filtered.length} of ${allTrades.length} trades, with the current filters applied.`}
+      description={`${total} of ${accountTradeCount} trades, with the current filters applied.`}
       padded={false}
     >
       {/* Two different empties, because they have two different ways out. An
           untouched journal is not a filter problem, and offering "Clear filters"
           to someone who has never added a trade sends them hunting for a control
           that was never the obstacle. */}
-      {allTrades.length === 0 ? (
+      {accountTradeCount === 0 ? (
         <EmptyState
           className="m-4.5"
           icon={<Receipt className="size-7 text-subtle-foreground" aria-hidden />}
@@ -79,7 +78,7 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
             ) : undefined
           }
         />
-      ) : filtered.length === 0 ? (
+      ) : total === 0 ? (
         <EmptyState
           className="m-4.5"
           icon={<SlidersHorizontal className="size-7 text-subtle-foreground" aria-hidden />}
@@ -102,18 +101,18 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
             </TableHeader>
 
             <TableBody>
-              {slice.items.map((trade) => (
+              {rows.map((trade) => (
                 <TradeRow key={trade.id} trade={trade} onEdit={() => setEditing(trade)} />
               ))}
             </TableBody>
           </Table>
 
           <TradesPagination
-            page={slice.page}
-            pages={slice.pages}
-            from={slice.from}
-            to={slice.to}
-            total={slice.total}
+            page={page}
+            pages={totalPages}
+            from={from}
+            to={to}
+            total={total}
             onPage={setPage}
           />
         </>

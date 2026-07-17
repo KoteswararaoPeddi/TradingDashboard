@@ -7,12 +7,11 @@ import type { EnrichedTrade } from "../../types/trade.types";
 import { Panel } from "../Panel";
 import { TRADE_TABLE_MIN_WIDTH, TradeHeadCells, TradeRowCells } from "../trades/trade-columns";
 
-/** How many rows the glance shows. The full ledger lives on /trades. */
-const LIMIT = 6;
-
 interface Props {
-  /** The active view, chronological. */
+  /** The active view's first page, already newest-first from the server. */
   trades: EnrichedTrade[];
+  /** Total trades in the active view, for the "of N" count. */
+  total: number;
 }
 
 /**
@@ -24,17 +23,17 @@ interface Props {
  *
  * Same columns as the full ledger on /trades — both render `trade-columns` —
  * minus the row actions. Editing belongs where you went to manage trades; these
- * six rows are for recognition, not administration.
+ * rows are for recognition, not administration. The server returns them already
+ * ordered and limited, so this renders them as-is.
  */
-export function RecentTrades({ trades }: Props) {
-  // Newest first — `sorted` is chronological, and recency is the point here.
-  const rows = trades.slice(-LIMIT).reverse();
+export function RecentTrades({ trades, total }: Props) {
+  const rows = trades;
 
   return (
     <Panel
       id="recent"
       title="Recent activity"
-      description={`The last ${rows.length} of ${trades.length} trades in the active view.`}
+      description={`The last ${rows.length} of ${total} trades in the active view.`}
       padded={false}
     >
       {rows.length === 0 ? (

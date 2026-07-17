@@ -8,7 +8,7 @@ import { OverviewSkeleton } from "./OverviewSkeleton";
 
 /** The account command center: the balance, its shape, and the figures behind it. */
 export function Overview() {
-  const { status, account, allTrades, metrics } = useCockpit();
+  const { status, account, accountTradeCount, metrics } = useCockpit();
 
   if (status !== "ready" || !metrics || !account) {
     return <OverviewSkeleton />;
@@ -21,7 +21,7 @@ export function Overview() {
         title="Account command center"
         // Says plainly that every number on the page follows the filters, so a
         // narrowed set never looks like the account's whole story.
-        description={`Showing ${metrics.totalTrades} of ${allTrades.length} trades. Values follow the active view.`}
+        description={`Showing ${metrics.totalTrades} of ${accountTradeCount} trades. Values follow the active view.`}
         padded={false}
       >
         <AccountHero

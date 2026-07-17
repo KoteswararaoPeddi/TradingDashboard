@@ -1,28 +1,30 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import { IsInt, IsOptional, Max, Min } from "class-validator";
+
+import { TradeFilterQueryDto } from "./trade-filter.dto";
 
 /**
- * Query for GET /api/trades.
+ * Query for GET /api/trades — the shared filter contract plus pagination.
  *
- * Only account scoping and sort live on the server. The dashboard's own filters
- * (symbol, direction, result, date range, P&L window) are applied client-side over
- * the full set, because every panel recomputes from the same in-memory trade list.
+ * The full filtered set is still enriched server-side (so the running balance and
+ * global index are correct), then only the requested page crosses the wire. That
+ * is the payload win: analytics needs every row, but the table never ships more
+ * than one page of them.
  */
-export class FindTradesDto {
-  @ApiPropertyOptional({
-    description: "Restrict to one trading account. Omit to return every trade.",
-    example: "clx8k2p9c0000abcd1234efgh",
-  })
+export class FindTradesDto extends TradeFilterQueryDto {
+  @ApiPropertyOptional({ description: "1-based page number.", default: 1, example: 1 })
   @IsOptional()
-  @IsString()
-  accountId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
 
-  @ApiPropertyOptional({
-    description: "Order by close time.",
-    enum: ["asc", "desc"],
-    default: "asc",
-  })
+  @ApiPropertyOptional({ description: "Rows per page.", default: 50, minimum: 1, maximum: 200 })
   @IsOptional()
-  @IsIn(["asc", "desc"])
-  order?: "asc" | "desc";
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
 }

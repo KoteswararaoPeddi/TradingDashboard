@@ -75,14 +75,17 @@ async function main(): Promise<void> {
     }),
   );
 
-  const netPnl = results.reduce((sum, trade) => sum + trade.netPnl, 0);
+  // Money columns come back as Prisma.Decimal; coerce for the summary arithmetic.
+  const num = (v: number | { toString(): string }): number => Number(v.toString());
+  const netPnl = results.reduce((sum, trade) => sum + num(trade.netPnl), 0);
+  const startingBalance = num(account.startingBalance);
   console.log(
     `Seeded account ${account.label} #${account.accountNumber} ` +
-      `(starting balance ${account.startingBalance} ${account.currency})`,
+      `(starting balance ${startingBalance} ${account.currency})`,
   );
   console.log(
     `Seeded ${results.length} trades | net P&L ${netPnl.toFixed(2)} | ` +
-      `closing balance ${(account.startingBalance + netPnl).toFixed(2)}`,
+      `closing balance ${(startingBalance + netPnl).toFixed(2)}`,
   );
 }
 

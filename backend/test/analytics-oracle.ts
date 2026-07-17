@@ -1,48 +1,46 @@
 /**
- * Verifies lib/metrics.ts against the reference design's known results.
+ * Backend port of the frontend's verify-metrics oracle.
  *
- * The design renders a closing balance of $1,166.40, a 50.00% win rate and a
- * 1.53 profit factor from its 18 trades. Those are hand-checkable facts about
- * the dataset, so they make a cheap, honest test of the whole metric bundle.
+ * Asserts the server-side analytics calculator reproduces the reference design's
+ * hand-checked results ($1,166.40 closing balance, 50% win rate, 1.53 profit
+ * factor) from the same 18 seed rows. This is the safety net for the frontend →
+ * backend calculation move: tsc/build can't tell you the math is right, this can.
  *
- * Run: npx tsx scripts/verify-metrics.ts
+ * Run: npx tsx test/analytics-oracle.ts
  */
-import { DESIGN_ACCOUNT, DESIGN_TRADES } from "../../backend/prisma/seed-data";
+import { DESIGN_ACCOUNT, DESIGN_TRADES } from "../prisma/seed-data";
 import {
-  defaultFilters,
+  calculateAnalytics,
+  drawdownRecovery,
+} from "../src/modules/analytics/analytics.calculator";
+import {
+  enrichTrades,
   filterTrades,
-  presetFilters,
   tradeDateRange,
   tradeSymbols,
-} from "../src/features/dashboard/lib/filters";
-import { calculateMetrics, drawdownRecovery, enrichTrades } from "../src/features/dashboard/lib/metrics";
-import type { Trade, TradeSide } from "../src/features/dashboard/types/trade.types";
+  type RawTrade,
+  type TradeFilterOptions,
+} from "../src/modules/trades/trades.logic";
+import { TradeSide } from "@prisma/client";
 
-/** Rebuild the API's response shape from the same source rows the seed uses. */
-const trades: Trade[] = DESIGN_TRADES.map((row, i) => ({
+/** Same UTC anchoring the seed uses, so buckets land on the same hour/day. */
+const toUtc = (wallClock: string): Date => new Date(`${wallClock.replace(" ", "T")}Z`);
+const toSide = (s: string): TradeSide => s.trim().toUpperCase() as TradeSide;
+
+const raw: RawTrade[] = DESIGN_TRADES.map((row, i) => ({
   id: `t${i}`,
-  accountId: "acc",
   symbol: row.symbol,
-  side: row.side as TradeSide,
-  size: row.size,
-  entryPrice: row.entryPrice,
-  exitPrice: row.exitPrice,
-  grossPnl: row.pnl,
+  side: toSide(row.side),
   netPnl: row.netPnl,
-  fees: 0,
-  openedAt: `${row.openDate.replace(" ", "T")}Z`,
-  closedAt: `${row.date.replace(" ", "T")}Z`,
-  ticket: row.ticket,
-  status: "CLOSED",
-  createdAt: `${row.date.replace(" ", "T")}Z`,
+  closedAt: toUtc(row.date),
+  openedAt: toUtc(row.openDate),
 }));
 
 const start = DESIGN_ACCOUNT.startingBalance;
-const enriched = enrichTrades(trades, start);
-const m = calculateMetrics(enriched, start);
+const enriched = enrichTrades(raw, start);
+const m = calculateAnalytics(enriched, start);
 
 let failed = 0;
-
 function check(label: string, actual: string | number, expected: string | number): void {
   const ok = String(actual) === String(expected);
   if (!ok) failed++;
@@ -61,7 +59,7 @@ check("gross profit", m.grossProfit.toFixed(2), "481.89");
 check("gross loss", m.grossLoss.toFixed(2), "315.49");
 
 console.log("\n--- internal consistency ---");
-check("equity curve points", m.equityCurve.length, 19); // 18 trades + the Start point
+check("equity curve points", m.equityCurve.length, 19);
 check("curve starts at balance", m.equityCurve[0].equity, start);
 check("curve ends at equity", m.equityCurve[18].equity.toFixed(2), "1166.40");
 check("weekday buckets", m.weekdayPnl.length, 7);
@@ -82,12 +80,6 @@ console.log(`  max drawdown       ${m.maxDrawdown.toFixed(2)}%`);
 console.log(`  drawdown recovery  ${drawdownRecovery(m.maxDrawdown).toFixed(2)}%`);
 console.log(`  best / worst trade ${m.bestTrade.toFixed(2)} / ${m.worstTrade.toFixed(2)}`);
 console.log(`  avg win / avg loss ${m.avgWin.toFixed(2)} / ${m.avgLoss.toFixed(2)}  (R:R ${m.rrRatio.toFixed(2)})`);
-console.log(`  long / short       ${m.longProfit.toFixed(2)} (${m.longWins}W/${m.longLosses}L) / ${m.shortProfit.toFixed(2)} (${m.shortWins}W/${m.shortLosses}L)`);
-console.log(`  streaks            ${m.maxConsecutiveWins}W / ${m.maxConsecutiveLosses}L`);
-console.log(`  best hour          ${String(m.bestHour.hour).padStart(2, "0")}:00 (${m.bestHour.value.toFixed(2)})`);
-console.log(`  worst hour         ${String(m.worstHour.hour).padStart(2, "0")}:00 (${m.worstHour.value.toFixed(2)})`);
-console.log(`  best weekday       ${m.bestWeekday.day} (${m.bestWeekday.value.toFixed(2)})`);
-console.log(`  trading days       ${m.dailyPnl.length}`);
 
 console.log("\n--- filters ---");
 const range = tradeDateRange(enriched);
@@ -95,48 +87,46 @@ check("date range from", range.from, "2026-07-08");
 check("date range to", range.to, "2026-07-15");
 check("symbols", tradeSymbols(enriched).join(","), "BTCUSD");
 
-const all = filterTrades(enriched, defaultFilters(range.from, range.to));
+const base: TradeFilterOptions = { from: range.from, to: range.to, sortBy: "newest" };
+const all = filterTrades(enriched, base);
 check("default shows all", all.length, 18);
 check("default sort newest", all[0].dayKey, "2026-07-15");
 
-const winners = filterTrades(enriched, presetFilters("profit", range));
+const winners = filterTrades(enriched, { ...base, result: "PROFIT" });
 check("preset winners", winners.length, 9);
-check("winners all > 0", String(winners.every((t) => t.netPnl > 0)), "true");
+check("winners all > 0", String(winners.every((t) => t.trade.netPnl > 0)), "true");
 
-const losers = filterTrades(enriched, presetFilters("loss", range));
+const losers = filterTrades(enriched, { ...base, result: "LOSS" });
 check("preset losses", losers.length, 9);
-check("losses all < 0", String(losers.every((t) => t.netPnl < 0)), "true");
+check("losses all < 0", String(losers.every((t) => t.trade.netPnl < 0)), "true");
 
-const liquidations = filterTrades(enriched, presetFilters("liquidation", range));
-check("preset liquidations", liquidations.length, 0); // none in this dataset
+const liquidations = filterTrades(enriched, { ...base, direction: "LIQUIDATION" });
+check("preset liquidations", liquidations.length, 0);
 
-const today = filterTrades(enriched, presetFilters("today", range));
+const today = filterTrades(enriched, { ...base, from: range.to, to: range.to });
 check("preset today (latest day)", today.length, 3);
 
-// The set spans 8 days (07-08 .. 07-15), so a 7-day window starts at 07-09 and
-// correctly drops the 9 trades that closed on 07-08.
-const last7 = filterTrades(enriched, presetFilters("last7", range));
+// 7-day window ending on the latest day: 07-09 .. 07-15, dropping the 9 07-08 trades.
+const last7 = filterTrades(enriched, { ...base, from: "2026-07-09", to: range.to });
 check("preset last 7 days", last7.length, 9);
 check("last7 excludes 07-08", String(last7.every((t) => t.dayKey >= "2026-07-09")), "true");
 
-const shorts = filterTrades(enriched, { ...defaultFilters(range.from, range.to), direction: "SHORT" });
+const shorts = filterTrades(enriched, { ...base, direction: "SHORT" });
 check("direction SHORT", shorts.length, 5);
 
-// 53.49, 91.54, 81.61, 82.94, 76.51
-const capped = filterTrades(enriched, { ...defaultFilters(range.from, range.to), minPnl: 50 });
+const capped = filterTrades(enriched, { ...base, minPnl: 50 });
 check("minPnl >= 50", capped.length, 5);
-check("minPnl bound respected", String(capped.every((t) => t.netPnl >= 50)), "true");
+check("minPnl bound respected", String(capped.every((t) => t.trade.netPnl >= 50)), "true");
 
 // A filtered view must not renumber history: index/balance belong to the account.
-const filteredWinners = filterTrades(enriched, presetFilters("profit", range));
 check(
   "filtered keeps global index",
-  String(filteredWinners.every((t) => enriched[t.index - 1].id === t.id)),
+  String(winners.every((t) => enriched[t.index - 1].trade.id === t.trade.id)),
   "true",
 );
 
-// Metrics over a subset still reconcile.
-const winnerMetrics = calculateMetrics(winners, start);
+// Analytics over a subset still reconcile.
+const winnerMetrics = calculateAnalytics(winners, start);
 check("winners profitFactor INF", winnerMetrics.profitFactor === null ? "INF" : "n", "INF");
 check("winners win rate", winnerMetrics.winRate.toFixed(2), "100.00");
 check("winners net", winnerMetrics.netProfit.toFixed(2), "481.89");

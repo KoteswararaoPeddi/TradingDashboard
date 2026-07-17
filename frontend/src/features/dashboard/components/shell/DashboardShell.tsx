@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-
 import { Typography } from "@components/ui/typography";
 
 import { useDashboardData } from "../DashboardProvider";
-import { calculateMetrics } from "../../lib/metrics";
 import { AccountCard } from "./AccountCard";
 import { BrandBlock } from "./BrandBlock";
 import { MainNav } from "./MainNav";
@@ -19,14 +16,12 @@ import { Topbar } from "./Topbar";
  * the HTML rather than after it.
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { status, error, account, trades } = useDashboardData();
+  const { status, error, account, initialAnalytics } = useDashboardData();
 
-  // The sidebar reports the account's standing, so it reads the full trade set.
-  // The panels on the right recompute from the filtered set instead.
-  const fullMetrics = useMemo(
-    () => (account ? calculateMetrics(trades, account.startingBalance) : null),
-    [trades, account],
-  );
+  // The sidebar reports the account's **whole-account** standing, so it reads the
+  // server's unfiltered bundle. It deliberately does not track the filters — the
+  // panels on the right do that.
+  const fullMetrics = initialAnalytics;
 
   const accountLabel = account ? `${account.label} #${account.accountNumber}` : "No account";
 

@@ -271,3 +271,16 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
 | 5 — Filters, Insights, Calendar, Table  | **Partial** — trades table + calendar heatmap done; filter chips partial; insights + leaderboard not started |
 | 6 — Export, Summary & Accent Theme      | Not started — `AccentSwitcher` exists; Export CSV / Copy Summary do not |
 | 7 — Polish                              | Not started   |
+
+---
+
+## Beyond-plan work
+
+- **[x] Server-side analytics migration** *(2026-07-17)* — moved all metrics + filtering + pagination
+  from the client to the backend (`GET /analytics`, paginated `GET /trades`). Frontend is now a pure
+  display layer: `metrics.ts` and the data-crunching half of `filters.ts` deleted; `useCockpit`/
+  `useTrades` fetch from the API. Backend calculator is a verbatim port of the old `metrics.ts`, pinned
+  by `backend/test/analytics-oracle.ts` (43 checks, green live). Supersedes Phase 3's "metrics module"
+  (client) and the architecture note that a server analytics endpoint was "optional".
+- **[~] Money Float→Decimal** — Prisma client is `Decimal`, `schema.prisma` still `Float`; coerced at
+  the DB boundary (`common/money.ts`). **Open:** reconcile schema vs client (owner decision).

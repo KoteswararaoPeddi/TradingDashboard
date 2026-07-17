@@ -1,5 +1,3 @@
-import type { EnrichedTrade } from "./trade.types";
-
 /** One point on the equity curve. The first point is the starting balance. */
 export interface EquityPoint {
   /** "Start", then the trade's position in the active set ("1", "2", …). */
@@ -12,6 +10,8 @@ export interface DailyPnl {
   /** "YYYY-MM-DD" */
   date: string;
   value: number;
+  /** Trades closed that day — the calendar cell shows it. */
+  count: number;
 }
 
 /** Net P&L for one weekday. */
@@ -68,9 +68,6 @@ export interface WeekdayExtreme {
  * with whatever the filters currently select.
  */
 export interface TradeMetrics {
-  /** The active set, chronological. */
-  sorted: EnrichedTrade[];
-
   // Counts
   totalTrades: number;
   wins: number;
@@ -100,6 +97,8 @@ export interface TradeMetrics {
   growth: number;
   /** Largest peak-to-valley drawdown, as a percentage. */
   maxDrawdown: number;
+  /** Gain needed to recover the deepest drawdown (asymmetric to maxDrawdown). */
+  drawdownRecovery: number;
 
   // Direction splits
   longProfit: number;
@@ -129,4 +128,17 @@ export interface TradeMetrics {
   worstHour: HourExtreme;
   bestWeekday: WeekdayExtreme;
   worstWeekday: WeekdayExtreme;
+}
+
+/**
+ * The full GET /api/analytics payload: the metric bundle plus the account-level
+ * context the filter controls need. `range` and `symbols` describe the whole
+ * account (not the filtered set), so the date inputs and asset select stay stable
+ * as filters change; `accountTradeCount` is the unfiltered total (the "X of Y"
+ * denominator and the empty-state test).
+ */
+export interface AnalyticsResponse extends TradeMetrics {
+  range: { from: string; to: string };
+  symbols: string[];
+  accountTradeCount: number;
 }

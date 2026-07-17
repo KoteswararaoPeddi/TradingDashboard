@@ -1,5 +1,4 @@
 import type { DailyPnl } from "../types/metrics.types";
-import type { EnrichedTrade } from "../types/trade.types";
 
 /**
  * Month names are a fixed list rather than `Intl.DateTimeFormat`, for the same
@@ -91,17 +90,14 @@ export interface CalendarMonth {
  */
 export function buildCalendarMonths(
   dailyPnl: DailyPnl[],
-  trades: EnrichedTrade[],
   range: { from: string; to: string },
 ): CalendarMonth[] {
   if (!range.from || !range.to) return [];
 
   const pnlByDay = new Map(dailyPnl.map((d) => [d.date, d.value]));
-
-  const countByDay = new Map<string, number>();
-  for (const trade of trades) {
-    countByDay.set(trade.dayKey, (countByDay.get(trade.dayKey) ?? 0) + 1);
-  }
+  // Per-day trade counts come straight from the server bundle now — no second
+  // grouping of the trades on the client, so the count can never drift from P&L.
+  const countByDay = new Map(dailyPnl.map((d) => [d.date, d.count]));
 
   // One scale for every month in the view, not one per month: per-month scales
   // would paint a $12 day in a quiet month the same green as a $140 day in a

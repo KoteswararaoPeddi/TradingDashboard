@@ -1,18 +1,22 @@
 import axiosInstance from "@lib/axios.config";
 import type { ApiResponse } from "@shared/types/api-response";
 
-import type { CreateTradeInput, Trade, UpdateTradeInput } from "../types/trade.types";
+import type { TradeFilters } from "../types/filter.types";
+import type { CreateTradeInput, Trade, TradesPage } from "../types/trade.types";
+import type { UpdateTradeInput } from "../types/trade.types";
+import { filtersToParams } from "./params";
 
 /**
- * Raw trades for an account, oldest close first.
+ * One page of trades for the active filters, each row carrying its global index
+ * and running balance (computed server-side over the whole account).
  *
- * The API deliberately returns raw rows and no computed metrics: the cockpit
- * fetches the set once and derives every panel from it via lib/metrics.ts, so
- * filtering never costs a round trip.
+ * The table only ever holds one page: analytics need every row, but the wire
+ * never carries more than `limit` of them. Filtering and pagination are the
+ * server's job now — the client just names the page and the filters.
  */
-export async function getTrades(accountId: string): Promise<Trade[]> {
-  const res = await axiosInstance.get<ApiResponse<Trade[]>>("/trades", {
-    params: { accountId, order: "asc" },
+export async function getTrades(filters: TradeFilters, page: number, limit = 50): Promise<TradesPage> {
+  const res = await axiosInstance.get<ApiResponse<TradesPage>>("/trades", {
+    params: { ...filtersToParams(filters), page, limit },
   });
   return res.data.data;
 }
@@ -20,9 +24,8 @@ export async function getTrades(accountId: string): Promise<Trade[]> {
 /**
  * Adds a trade.
  *
- * The caller is responsible for `router.refresh()` afterwards: the account and
- * trade set are loaded on the server (see dashboard.loader.ts), so re-running the
- * loader is what puts the new row — and every metric derived from it — on screen.
+ * The caller re-fetches afterwards (the dashboard's analytics + trades hooks own
+ * their data), so a new row — and every metric derived from it — reappears.
  */
 export async function createTrade(input: CreateTradeInput): Promise<Trade> {
   const res = await axiosInstance.post<ApiResponse<Trade>>("/trades", input);

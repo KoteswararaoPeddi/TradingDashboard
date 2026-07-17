@@ -1,13 +1,18 @@
 import { getErrorMessage } from "@lib/get-error-message";
 
+import { defaultFilters } from "../lib/filters";
+import type { AnalyticsResponse } from "../types/metrics.types";
+import type { TradesPage, TradingAccount } from "../types/trade.types";
 import { getActiveAccount } from "./accounts.service";
+import { getAnalytics } from "./analytics.service";
 import { getTrades } from "./trades.service";
-import type { Trade, TradingAccount } from "../types/trade.types";
 
 export interface DashboardPayload {
   account: TradingAccount | null;
-  /** Raw trades. The client enriches them, so the RSC payload stays small. */
-  trades: Trade[];
+  /** Server-computed analytics for the unfiltered set — the first-paint numbers. */
+  analytics: AnalyticsResponse | null;
+  /** First page of trades for the table. */
+  tradesPage: TradesPage | null;
   /** Set when the fetch failed; the shell renders it instead of the panels. */
   error: string | null;
 }
@@ -16,27 +21,25 @@ export interface DashboardPayload {
  * Loads the cockpit's data on the **server**, for the `(app)` layout.
  *
  * Fetching here rather than in a client effect is what puts real numbers in the
- * first paint: a `useEffect` fetch cannot start until the JS has downloaded and
- * hydrated, which measured at ~605ms of dead time before the first request even
- * left the browser, with a skeleton on screen throughout.
+ * first paint. Now that the backend owns the maths, that means the ready-to-render
+ * analytics bundle ships in the HTML — the client re-fetches only when a filter
+ * changes.
  *
- * The two calls are sequential because the dependency is real: trades are fetched
- * by `accountId`, so the account has to resolve first. That is the one case
- * code-standards.md sanctions sequential awaits. Server-side the pair costs a
- * couple of local round trips instead of the user's full network latency twice.
- *
- * Never throws: a dead API should render a message inside the shell, not blow up
- * the whole route.
+ * The three calls are independent (the API resolves the single account itself),
+ * so they run in parallel. Never throws: a dead API renders a message inside the
+ * shell, not a blown-up route.
  */
 export async function loadDashboard(): Promise<DashboardPayload> {
   try {
-    const account = await getActiveAccount();
-    if (!account) return { account: null, trades: [], error: null };
-
-    const trades = await getTrades(account.id);
-    return { account, trades, error: null };
+    const unfiltered = defaultFilters("", "");
+    const [account, analytics, tradesPage] = await Promise.all([
+      getActiveAccount(),
+      getAnalytics(unfiltered),
+      getTrades(unfiltered, 1),
+    ]);
+    return { account, analytics, tradesPage, error: null };
   } catch (error) {
     console.error("[dashboard.loader] failed to load", error);
-    return { account: null, trades: [], error: getErrorMessage(error) };
+    return { account: null, analytics: null, tradesPage: null, error: getErrorMessage(error) };
   }
 }

@@ -8,12 +8,11 @@ import {
   ApiParam,
   ApiTags,
 } from "@nestjs/swagger";
-import { Trade } from "@prisma/client";
 
 import { CreateTradeDto } from "./dto/create-trade.dto";
 import { FindTradesDto } from "./dto/find-trades.dto";
 import { UpdateTradeDto } from "./dto/update-trade.dto";
-import { TradeEntity } from "./entities/trade.entity";
+import { PaginatedTrades, TradeEntity } from "./entities/trade.entity";
 import { TradesService } from "./trades.service";
 
 const TRADE_EXAMPLE = {
@@ -40,24 +39,29 @@ export class TradesController {
   constructor(private readonly trades: TradesService) {}
 
   @ApiOperation({
-    summary: "List trades",
+    summary: "List trades (filtered, paginated)",
     description:
-      "Returns raw trades, oldest close first. Metrics (equity curve, win rate, drawdown, " +
-      "profit factor) are derived by the client from this set, not by the API.",
+      "Returns one page of trades matching the filters, each carrying its global index and " +
+      "running balance. Analytics live at GET /analytics; this endpoint only feeds the table.",
   })
   // The global ResponseInterceptor wraps handler returns, so the example shows the envelope.
   @ApiOkResponse({
-    description: "Trades for the requested account.",
-    schema: { example: { success: true, message: "OK", data: [TRADE_EXAMPLE] } },
+    description: "A page of trades matching the filters.",
+    schema: {
+      example: {
+        success: true,
+        message: "OK",
+        data: { items: [{ ...TRADE_EXAMPLE, index: 1, balanceAfter: 1036.52 }], page: 1, limit: 50, total: 1, totalPages: 1 },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: "The requested accountId does not exist.",
     schema: { example: { success: false, message: 'No trading account with id "abc".' } },
   })
   @Get()
-  async findAll(@Query() query: FindTradesDto): Promise<{ message: string; data: TradeEntity[] }> {
-    const data = (await this.trades.findAll(query)) as TradeEntity[];
-    return { message: "OK", data };
+  async findAll(@Query() query: FindTradesDto): Promise<{ message: string; data: PaginatedTrades }> {
+    return { message: "OK", data: await this.trades.findAll(query) };
   }
 
   @ApiOperation({
@@ -79,8 +83,8 @@ export class TradesController {
     schema: { example: { success: false, message: "That value is already in use." } },
   })
   @Post()
-  async create(@Body() dto: CreateTradeDto): Promise<{ message: string; data: Trade }> {
-    return { message: "Trade added.", data: await this.trades.create(dto) };
+  async create(@Body() dto: CreateTradeDto): Promise<{ message: string; data: TradeEntity }> {
+    return { message: "Trade added.", data: TradeEntity.from(await this.trades.create(dto)) };
   }
 
   @ApiOperation({
@@ -100,8 +104,8 @@ export class TradesController {
   async update(
     @Param("id") id: string,
     @Body() dto: UpdateTradeDto,
-  ): Promise<{ message: string; data: Trade }> {
-    return { message: "Trade updated.", data: await this.trades.update(id, dto) };
+  ): Promise<{ message: string; data: TradeEntity }> {
+    return { message: "Trade updated.", data: TradeEntity.from(await this.trades.update(id, dto)) };
   }
 
   @ApiOperation({ summary: "Delete a trade" })
@@ -115,7 +119,7 @@ export class TradesController {
     schema: { example: { success: false, message: 'No trade with id "abc".' } },
   })
   @Delete(":id")
-  async remove(@Param("id") id: string): Promise<{ message: string; data: Trade }> {
-    return { message: "Trade deleted.", data: await this.trades.remove(id) };
+  async remove(@Param("id") id: string): Promise<{ message: string; data: TradeEntity }> {
+    return { message: "Trade deleted.", data: TradeEntity.from(await this.trades.remove(id)) };
   }
 }

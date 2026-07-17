@@ -1,52 +1,80 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 
+import { getErrorMessage } from "@lib/get-error-message";
+
+import { getAnalytics } from "../api/analytics.service";
 import { useDashboardData } from "../components/DashboardProvider";
-import { filterTrades, tradeDateRange } from "../lib/filters";
-import { calculateMetrics } from "../lib/metrics";
 import { useFiltersStore } from "../stores/filters.store";
-import type { TradeMetrics } from "../types/metrics.types";
-import type { EnrichedTrade, TradingAccount } from "../types/trade.types";
+import type { AnalyticsResponse } from "../types/metrics.types";
+import type { TradingAccount } from "../types/trade.types";
 
 interface Cockpit {
   status: "ready" | "error";
   error: string | null;
   account: TradingAccount | null;
-  /** The account's whole trade set. */
-  allTrades: EnrichedTrade[];
-  /** The active view. */
-  filtered: EnrichedTrade[];
-  /** Metrics over the **filtered** set — what every panel renders. */
-  metrics: TradeMetrics | null;
+  /** The analytics bundle for the active filters — what every panel renders. */
+  metrics: AnalyticsResponse | null;
+  /** Trades in the whole account (unfiltered) — the "X of Y" denominator. */
+  accountTradeCount: number;
+  /** A refetch is in flight; panels dim rather than blanking. */
+  fetching: boolean;
 }
 
 /**
- * The cockpit's single derivation point: raw trades + filters in, active view and
- * metrics out.
+ * The cockpit's single data point: filters in, server-computed analytics out.
  *
- * Every panel calls this rather than deriving its own numbers, which is what
- * guarantees the overview, stats, charts, calendar and table can never disagree
- * about the same trade set.
+ * The frontend no longer derives anything — it sends the active filters to
+ * GET /analytics and renders the bundle that returns. Every panel calls this, so
+ * overview, stats, charts and calendar can never disagree about the same set.
+ *
+ * First paint uses the server-seeded bundle (no loading gap); each filter change
+ * triggers a refetch, with the previous numbers left on screen (dimmed) until the
+ * new ones arrive.
  */
 export function useCockpit(): Cockpit {
-  const { status, error, account, trades: allTrades } = useDashboardData();
-
+  const { status, error: seedError, account, initialAnalytics } = useDashboardData();
   const filters = useFiltersStore((s) => s.filters);
   const initRange = useFiltersStore((s) => s.initRange);
 
-  // Seed the date bounds from the data once it arrives, so the date inputs and
-  // the presets have a real span to resolve against.
+  const [metrics, setMetrics] = useState<AnalyticsResponse | null>(initialAnalytics);
+  const [error, setError] = useState<string | null>(seedError);
+  const [fetching, setFetching] = useState(false);
+
+  // Seed the date bounds from the account's real span, once, so the presets and
+  // date inputs have something to resolve against.
   useEffect(() => {
-    if (allTrades.length) initRange(tradeDateRange(allTrades));
-  }, [allTrades, initRange]);
+    if (initialAnalytics) initRange(initialAnalytics.range);
+  }, [initialAnalytics, initRange]);
 
-  const filtered = useMemo(() => filterTrades(allTrades, filters), [allTrades, filters]);
+  useEffect(() => {
+    if (status === "error") return;
+    let cancelled = false;
+    setFetching(true);
+    getAnalytics(filters)
+      .then((res) => {
+        if (cancelled) return;
+        setMetrics(res);
+        setError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(getErrorMessage(e));
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, status]);
 
-  const metrics = useMemo(
-    () => (account ? calculateMetrics(filtered, account.startingBalance) : null),
-    [filtered, account],
-  );
-
-  return { status, error, account, allTrades, filtered, metrics };
+  return {
+    status,
+    error,
+    account,
+    metrics,
+    accountTradeCount: metrics?.accountTradeCount ?? 0,
+    fetching,
+  };
 }

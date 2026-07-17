@@ -89,18 +89,23 @@ Trade           id, accountId, symbol, side (TradeSide), size,
 
 ## Analytics computation (where the metrics come from)
 
-The design computes every metric client-side from the trade array (`calculateMetrics`). We keep that
-shape: a **pure, framework-free metrics module** (`features/dashboard/lib/metrics.ts`) takes the
-active (filtered) trade set and returns the full metric bundle (totals, win rate, gross/net, profit
-factor, best/worst, long/short splits, streaks, max drawdown, equity curve, weekday/hour/daily
-aggregates, per-asset rollups, best/worst hour & weekday). The UI panels are pure functions of that
-bundle, so overview, stats, charts, insights, leaderboard, heatmap, and the table all stay consistent.
+**All metrics are computed server-side** *(2026-07-17 — moved from the client)*. The pure,
+framework-free calculator lives in the backend (`modules/analytics/analytics.calculator.ts` +
+`modules/trades/trades.logic.ts`); it takes the filtered, enriched trade set and returns the full
+bundle (totals, win rate, gross/net, profit factor, best/worst, long/short splits, streaks, max
+drawdown, equity curve, weekday/hour/daily aggregates, per-asset rollups, best/worst hour & weekday).
+`GET /api/analytics?<filters>` returns it ready-to-render; the frontend performs **no calculation**.
 
-- Filtering + sorting happen client-side over the fetched trade set (`getFilteredTrades`), then
-  metrics recompute; the "active view" drives **every** panel.
-- A backend `analytics` summary endpoint is **optional** (only if the trade set grows large enough
-  that client compute is slow — a Layer-6 optimization to approve first, per code-standards.md). The
-  default is client-side compute against `GET /api/trades`.
+- **Filtering + sorting happen server-side**, driven by the same filter query params on both
+  `GET /analytics` and `GET /trades`. The client only translates filter chips → query params
+  (`features/dashboard/api/params.ts`) and renders what returns.
+- The trades table is **server-paginated** (`GET /trades?page&limit&<filters>`), each row carrying its
+  global `index` and running `balanceAfter` (computed over the whole account). Analytics is computed
+  over the *whole* filtered set (not a page).
+- **First paint** is server-rendered (loader fetches the unfiltered bundle + first page); each filter
+  change triggers a client refetch, previous numbers dimmed until the new ones arrive.
+- Correctness is pinned by the backend oracle `backend/test/analytics-oracle.ts` (43 checks against
+  the reference design — $1,166.40 / 50% / 1.53). `tsc`/`build` cannot catch a wrong formula; this can.
 
 ---
 
@@ -120,13 +125,16 @@ backend/
     ├── prisma/          → PrismaService + PrismaModule (@Global)
     └── modules/         → one folder per domain
         ├── accounts/     → the journal's account: list, get one, settings PATCH   ← built
-        ├── trades/       → trades (account-scoped): list + full CRUD              ← built
+        ├── trades/       → trades: filtered + paginated list, full CRUD, logic    ← built
+        ├── analytics/    → GET /analytics: the server-computed metric bundle      ← built
         └── health/       → health check                                           ← built
 ```
 
-**All three feature modules exist** (plus `prisma`, `config`, and the `common` filters + response
+**All four feature modules exist** (plus `prisma`, `config`, and the `common` filters + response
 interceptor). Trades are **user-entered**: `POST/PATCH/DELETE /api/trades` back the add/edit/delete
-UI. `prisma/seed.ts` (`npm run seed`) still loads the reference dataset, but it is **opt-in** — the
+UI. `analytics` depends on `accounts` for the starting balance and reads trades via Prisma; its heavy
+lifting is the pure `analytics.calculator` / `trades.logic` (framework-free, oracle-pinned).
+`prisma/seed.ts` (`npm run seed`) still loads the reference dataset, but it is **opt-in** — the
 `prisma.seed` hook was removed from `package.json`, so `migrate dev`/`reset` no longer auto-populate
 a journal the user is about to fill themselves. CSV import remains a later phase.
 
@@ -248,8 +256,9 @@ the shared axios instance from `@lib/axios.config`.
   the HTML rendered empty ("No account") even with the payload present. Context also gives each
   request its own value, with no shared mutable state. **Filters stay in zustand** — client-only state
   that is never server-rendered.
-- **Metrics are derived client-side** from the fetched trade set via `features/dashboard/lib/metrics.ts`;
-  filters/sort live in a store or local state and drive a single `renderDashboard`-equivalent recompute.
+- **Metrics are computed server-side** *(2026-07-17)* and fetched ready-to-render from `GET /analytics`
+  via `useCockpit()`; the table is fetched server-paginated via `useTrades()`. Filters/sort live in a
+  zustand store and drive a client refetch. The frontend performs no analytics of its own.
 
 ---
 

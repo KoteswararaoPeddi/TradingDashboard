@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Param, Patch } from "@nestjs/common";
 import { ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
-import { TradingAccount } from "@prisma/client";
 
 import { AccountsService } from "./accounts.service";
 import { UpdateAccountDto } from "./dto/update-account.dto";
@@ -42,8 +41,7 @@ export class AccountsController {
   })
   @Get()
   async findAll(): Promise<{ message: string; data: AccountEntity[] }> {
-    const data = (await this.accounts.findAll()) as AccountEntity[];
-    return { message: "OK", data };
+    return { message: "OK", data: (await this.accounts.findAll()).map(AccountEntity.from) };
   }
 
   @ApiOperation({
@@ -65,8 +63,8 @@ export class AccountsController {
   async update(
     @Param("id") id: string,
     @Body() dto: UpdateAccountDto,
-  ): Promise<{ message: string; data: TradingAccount }> {
-    return { message: "Settings saved.", data: await this.accounts.update(id, dto) };
+  ): Promise<{ message: string; data: AccountEntity }> {
+    return { message: "Settings saved.", data: AccountEntity.from(await this.accounts.update(id, dto)) };
   }
 
   @ApiOperation({ summary: "Get one trading account" })
@@ -82,7 +80,7 @@ export class AccountsController {
     },
   })
   @Get(":id")
-  async findOne(@Param("id") id: string): Promise<{ message: string; data: TradingAccount }> {
-    return { message: "OK", data: await this.accounts.findOne(id) };
+  async findOne(@Param("id") id: string): Promise<{ message: string; data: AccountEntity }> {
+    return { message: "OK", data: AccountEntity.from(await this.accounts.findOne(id)) };
   }
 }

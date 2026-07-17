@@ -97,12 +97,17 @@ export interface EnrichedTrade extends Trade {
   index: number;
   /** Account balance immediately after this trade closed. */
   balanceAfter: number;
-  /** UTC hour the trade closed (0-23). */
-  hour: number;
-  /** UTC weekday the trade closed (0 = Sunday). */
-  weekday: number;
-  /** UTC calendar day the trade closed, "YYYY-MM-DD". */
-  dayKey: string;
   /** Human hold time ("34m 12s"), or null when the open time is unknown. */
   holdTime: string | null;
+}
+
+/** One page of trades, as returned by GET /api/trades. */
+export interface TradesPage {
+  items: EnrichedTrade[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  /** Trades in the whole account (unfiltered) — empty-account vs no-match test. */
+  accountTradeCount: number;
 }

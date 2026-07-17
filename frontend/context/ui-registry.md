@@ -154,8 +154,10 @@ ledger) and `overview/RecentTrades` (the dashboard glance).
 - **Never put server-loaded data in a zustand store.** `useSyncExternalStore`'s server snapshot misses
   a same-render mutation, so the HTML renders empty. Context is what survives the server render;
   zustand is for client-only state (filters).
-- **There is no loading state for the trade set** — it ships with the HTML, so panels handle `error`
-  only. Skeletons remain for `ssr:false` charts, which genuinely cannot server-render.
+- **First paint has no loading state** — the server-computed analytics + first trades page ship with
+  the HTML *(2026-07-17)*. On a **filter change**, `useCockpit`/`useTrades` refetch from the backend and
+  expose a `fetching` flag; panels keep the previous numbers on screen (dimmed) rather than blanking to
+  a skeleton. Skeletons remain for `ssr:false` charts and the pre-seed table render.
 
 ---
 

@@ -32,14 +32,14 @@ const GRID_COLS = "grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,0.8fr)]";
  * column, or in the same row, and names itself.
  */
 export function CalendarHeatmap() {
-  const { status, error, metrics, filtered, allTrades } = useCockpit();
+  const { status, error, metrics, accountTradeCount } = useCockpit();
   const range = useFiltersStore((s) => s.filters);
   const reset = useFiltersStore((s) => s.reset);
   const todayKey = useTodayKey();
 
   const months = useMemo(
-    () => (metrics ? buildCalendarMonths(metrics.dailyPnl, filtered, range) : []),
-    [metrics, filtered, range],
+    () => (metrics ? buildCalendarMonths(metrics.dailyPnl, range) : []),
+    [metrics, range],
   );
 
   // Pin the *month*, not its index. When a filter change rebuilds the range, an
@@ -81,7 +81,7 @@ export function CalendarHeatmap() {
     >
       {/* Two empties with two different ways out, matching the ledger: an
           untouched journal is not a filter problem. */}
-      {allTrades.length === 0 ? (
+      {accountTradeCount === 0 ? (
         <EmptyState
           className="m-4.5"
           icon={<CalendarRange className="size-7 text-subtle-foreground" aria-hidden />}

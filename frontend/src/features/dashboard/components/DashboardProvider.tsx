@@ -3,33 +3,35 @@
 import { createContext, useContext, useMemo } from "react";
 
 import type { DashboardPayload } from "../api/dashboard.loader";
-import { enrichTrades } from "../lib/metrics";
-import type { EnrichedTrade, TradingAccount } from "../types/trade.types";
+import type { AnalyticsResponse } from "../types/metrics.types";
+import type { TradesPage, TradingAccount } from "../types/trade.types";
 
 export interface DashboardData {
   status: "ready" | "error";
   error: string | null;
   account: TradingAccount | null;
-  /** The account's full trade set, enriched once (index + running balance). */
-  trades: EnrichedTrade[];
+  /** Server-computed analytics for the unfiltered set — the first-paint seed. */
+  initialAnalytics: AnalyticsResponse | null;
+  /** First page of trades — the table's first-paint seed. */
+  initialTradesPage: TradesPage | null;
 }
 
 const DashboardContext = createContext<DashboardData | null>(null);
 
 /**
- * Shares the server-loaded account + trade set with the whole cockpit.
+ * Shares the server-loaded seed with the whole cockpit.
  *
- * Context rather than a module-level store, deliberately. The data is fetched on
+ * Context rather than a module-level store, deliberately: the data is fetched on
  * the server and handed down as a prop, and context is the only mechanism that
  * carries it through **both** the server render and the client one. A zustand
- * singleton seeded during render does not: `useSyncExternalStore`'s server
- * snapshot does not observe a mutation made in the same render pass, so the
- * server HTML came out empty ("No account") even though the payload was present.
+ * singleton seeded during render does not — `useSyncExternalStore`'s server
+ * snapshot does not observe a mutation made in the same render pass — so the
+ * server HTML came out empty even though the payload was present. Context also
+ * gives each request its own value, with no shared mutable state on the server.
  *
- * Context also sidesteps the module-singleton-on-the-server problem entirely —
- * each request gets its own provider value, with no shared mutable state.
- *
- * Filters stay in zustand: that state is client-only and never server-rendered.
+ * The numbers now come from the backend, so the provider no longer computes
+ * anything: it just holds the seed the client hooks refetch on top of. Filters
+ * stay in zustand (client-only, never server-rendered).
  */
 export function DashboardProvider({
   payload,
@@ -43,10 +45,8 @@ export function DashboardProvider({
       status: payload.error ? "error" : "ready",
       error: payload.error,
       account: payload.account,
-      // Enrich on render rather than on the server: index/running balance/UTC
-      // buckets are cheap to derive and would otherwise add six fields per trade
-      // to the serialized payload.
-      trades: payload.account ? enrichTrades(payload.trades, payload.account.startingBalance) : [],
+      initialAnalytics: payload.analytics,
+      initialTradesPage: payload.tradesPage,
     }),
     [payload],
   );
@@ -54,7 +54,7 @@ export function DashboardProvider({
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 }
 
-/** The server-loaded account + trades. Throws outside the provider, by design. */
+/** The server-loaded seed. Throws outside the provider, by design. */
 export function useDashboardData(): DashboardData {
   const data = useContext(DashboardContext);
   if (!data) {

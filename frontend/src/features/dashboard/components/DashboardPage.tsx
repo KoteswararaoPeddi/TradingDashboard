@@ -1,8 +1,11 @@
 "use client";
 
-import { useCockpit } from "../hooks/use-cockpit";
+import { useTrades } from "../hooks/use-trades";
 import { Overview } from "./overview/Overview";
 import { RecentTrades } from "./overview/RecentTrades";
+
+/** How many rows the glance shows. The full ledger lives on /trades. */
+const RECENT_LIMIT = 6;
 
 /**
  * The glance. This page answers "where do I stand" and "what just happened", and
@@ -10,12 +13,14 @@ import { RecentTrades } from "./overview/RecentTrades";
  * different job and live on Analytics.
  */
 export function DashboardPage() {
-  const { status, metrics } = useCockpit();
+  // The first page of the active view is the recent activity — the server sorts
+  // and limits it, so the glance asks for exactly the rows it shows.
+  const { status, rows, total } = useTrades(1, RECENT_LIMIT);
 
   return (
     <div className="grid gap-4.5">
       <Overview />
-      {status === "ready" && metrics ? <RecentTrades trades={metrics.sorted} /> : null}
+      {status === "ready" ? <RecentTrades trades={rows} total={total} /> : null}
     </div>
   );
 }

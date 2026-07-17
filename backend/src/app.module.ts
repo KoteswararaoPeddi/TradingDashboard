@@ -9,6 +9,7 @@ import { ResponseInterceptor } from "./common/interceptors/response.interceptor"
 import { PrismaModule } from "./prisma/prisma.module";
 import { AccountsModule } from "./modules/accounts/accounts.module";
 import { TradesModule } from "./modules/trades/trades.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { HealthModule } from "./modules/health/health.module";
 
 @Module({
@@ -22,6 +23,7 @@ import { HealthModule } from "./modules/health/health.module";
     PrismaModule,
     AccountsModule,
     TradesModule,
+    AnalyticsModule,
     HealthModule,
   ],
   providers: [

@@ -1,5 +1,4 @@
 import type { Period, Preset, ResultFilter, TradeFilters } from "../types/filter.types";
-import type { EnrichedTrade } from "../types/trade.types";
 
 /**
  * The date window a period chip selects.
@@ -72,71 +71,6 @@ export function defaultFilters(from: string, to: string): TradeFilters {
     maxPnl: null,
     sortBy: "newest",
   };
-}
-
-/** The account's full date span, used to seed and reset the date inputs. */
-export function tradeDateRange(trades: EnrichedTrade[]): { from: string; to: string } {
-  if (!trades.length) return { from: "", to: "" };
-  const days = trades.map((t) => t.dayKey).sort();
-  return { from: days[0], to: days[days.length - 1] };
-}
-
-/** Distinct symbols in the set, for the asset select. */
-export function tradeSymbols(trades: EnrichedTrade[]): string[] {
-  return [...new Set(trades.map((t) => t.symbol))].sort();
-}
-
-/**
- * Narrow the set to the active view, then order it.
- *
- * Pure and synchronous: with a personal journal's trade count this runs in
- * microseconds, so the whole dashboard can recompute on every keystroke without
- * a round trip.
- */
-export function filterTrades(trades: EnrichedTrade[], filters: TradeFilters): EnrichedTrade[] {
-  const search = filters.search.trim().toLowerCase();
-
-  const matched = trades.filter((trade) => {
-    if (search && !trade.symbol.toLowerCase().includes(search)) return false;
-    if (filters.asset !== "ALL" && trade.symbol !== filters.asset) return false;
-    if (filters.direction !== "ALL" && trade.side !== filters.direction) return false;
-
-    // dayKey is "YYYY-MM-DD", so lexical comparison is chronological.
-    if (filters.from && trade.dayKey < filters.from) return false;
-    if (filters.to && trade.dayKey > filters.to) return false;
-
-    if (filters.minPnl !== null && trade.netPnl < filters.minPnl) return false;
-    if (filters.maxPnl !== null && trade.netPnl > filters.maxPnl) return false;
-
-    if (filters.result === "PROFIT" && trade.netPnl <= 0) return false;
-    if (filters.result === "LOSS" && trade.netPnl >= 0) return false;
-    if (filters.result === "BREAKEVEN" && trade.netPnl !== 0) return false;
-
-    return true;
-  });
-
-  return sortTrades(matched, filters.sortBy);
-}
-
-function sortTrades(trades: EnrichedTrade[], sortBy: TradeFilters["sortBy"]): EnrichedTrade[] {
-  const sorted = [...trades];
-  const closedAt = (t: EnrichedTrade) => new Date(t.closedAt).getTime();
-
-  switch (sortBy) {
-    case "newest":
-      return sorted.sort((a, b) => closedAt(b) - closedAt(a));
-    case "oldest":
-      return sorted.sort((a, b) => closedAt(a) - closedAt(b));
-    case "highest":
-      return sorted.sort((a, b) => b.netPnl - a.netPnl);
-    case "lowest":
-      return sorted.sort((a, b) => a.netPnl - b.netPnl);
-    case "asset":
-      // Ties inside a symbol fall back to newest, so the order is deterministic.
-      return sorted.sort((a, b) => a.symbol.localeCompare(b.symbol) || closedAt(b) - closedAt(a));
-    default:
-      return sorted;
-  }
 }
 
 /**
