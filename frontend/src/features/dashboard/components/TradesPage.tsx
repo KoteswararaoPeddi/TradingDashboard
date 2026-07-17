@@ -5,8 +5,9 @@ import { useState } from "react";
 
 import { Button } from "@components/ui/button";
 
+import { AddTradeDialog } from "./trades/AddTradeDialog";
+import { ExportCsvButton } from "./trades/ExportCsvButton";
 import { FilterChips } from "./filters/FilterChips";
-import { TradeFormDialog } from "./trades/TradeFormDialog";
 import { TradesTable } from "./trades/TradesTable";
 
 /** Every trade with running balance and result. */
@@ -19,15 +20,20 @@ export function TradesPage() {
           whole, so it belongs to the page rather than to any row. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4.5">
         <FilterChips />
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="size-4" aria-hidden />
-          Add trade
-        </Button>
+        {/* Two ledger-wide actions, grouped: export the current view, or add to it.
+            Export is outline (secondary) so Add trade stays the single primary. */}
+        <div className="flex items-center gap-2">
+          <ExportCsvButton />
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Plus className="size-4" aria-hidden />
+            Add trade
+          </Button>
+        </div>
       </div>
 
       <TradesTable onAddTrade={() => setAdding(true)} />
 
-      <TradeFormDialog open={adding} onOpenChange={setAdding} />
+      <AddTradeDialog open={adding} onOpenChange={setAdding} />
     </div>
   );
 }

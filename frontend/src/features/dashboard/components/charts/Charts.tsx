@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { Skeleton } from "@components/ui/skeleton";
+import { formatDate } from "@lib/format";
 
 import { useCockpit } from "../../hooks/use-cockpit";
 import { ChartPanel } from "./ChartPanel";
@@ -51,7 +52,7 @@ export function Charts() {
           </ChartPanel>
 
           <ChartPanel title="Daily P&L" description="Net result per trading day.">
-            <SignedBarChart data={metrics.dailyPnl} categoryKey="date" valueKey="value" name="Daily P&L" />
+            <SignedBarChart data={metrics.dailyPnl} categoryKey="date" valueKey="value" name="Daily P&L" formatCategory={formatDate} />
           </ChartPanel>
 
           <ChartPanel title="Weekday Performance" description="Where the week is paying or bleeding.">

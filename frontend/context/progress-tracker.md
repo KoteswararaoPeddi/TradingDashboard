@@ -149,7 +149,9 @@ charts, insights + asset leaderboard, calendar heatmap, and a filterable trades 
 - **The add/edit dialog has not been driven in a browser.** Its submit path is typechecked and the
   API beneath it is verified live, but the dialog opening, validating and submitting was never
   clicked through — no browser automation was available in the session that built it.
-- **The calendar heatmap and insights + leaderboard are still placeholders.**
+- **The asset leaderboard is not built.** The **Risk & edge insights** section was removed from
+  `/analytics` *(2026-07-17)* at the user's request — its `SectionPlaceholder` is deleted, and that
+  component (last usage) went with it. (The calendar heatmap is built; see D-entries above.)
 - **The filter bar is only chips.** Search, asset/direction selects, date inputs, min/max P&L and sort
   have no UI yet — `filterTrades` and the store already support every one of them.
 - **No `SideBadge`/`ResultBadge`** — the ledger renders side as coloured text, not the design's pills.
@@ -181,7 +183,7 @@ See build-plan.md for the full per-phase breakdown.
 - [~] Phase 4 — Charts (all seven build and render; three defects open — see build-plan.md)
 - [~] Phase 4.5 — Multi-page redesign (routes + nav + Overview done; token rebuild and Filters open)
 - [~] Phase 5 — Filters, Insights, Calendar, Trades table (trades table + calendar heatmap done; filter
-      chips partial; insights + leaderboard not started)
+      chips partial; Risk & edge insights dropped 2026-07-17; asset leaderboard not started)
 - [ ] Phase 6 — Export & Copy Summary (the accent switcher exists; the two export actions do not)
 - [ ] Phase 7 — Polish
 
@@ -189,6 +191,28 @@ See build-plan.md for the full per-phase breakdown.
 
 ## Decisions Made During Build
 
+- **Adding a trade is paste-only; editing was removed** *(2026-07-17)*. The field form and the row
+  edit (pencil) action are gone — `TradeFormDialog.tsx` and `schemas/trade.schema.ts` deleted, replaced
+  by the paste-only `AddTradeDialog`. A trade comes off a broker as a block, so pasting is the whole
+  input path; a correction is delete-and-repaste, which keeps exactly one write path and nothing to
+  keep in sync. `TradeRow` is delete-only.
+- **A mutation refreshes the view without a page reload** *(2026-07-17)*. Symptom: after adding a trade
+  the table did not update until a manual refresh. Cause: the backend owns the numbers, so `useCockpit`
+  and `useTrades` refetch on a *filter* change — but a mutation changes no filter, and `router.refresh()`
+  can't help because the hooks seed the server payload through `useState`, which ignores prop updates.
+  Fix: a `dataVersion` counter in the filters store, bumped by `notifyDataChanged()` on every
+  mutation and included in both hooks' fetch deps. It also clears the date window so a trade dated after
+  the old maximum isn't filtered out of its own confirmation. **Lesson:** `useState(serverProp)` silently
+  ignores later prop changes — `router.refresh()` looks like it should update client-fetch hooks and
+  doesn't. An explicit invalidation signal is the reliable path.
+- **Paste-import parser decisions** *(2026-07-17)*. `lib/parse-trades.ts` reads the broker's
+  12-line-per-trade block. Decisions worth keeping: **preview-first** (parsed rows show before any
+  write, since this touches the journal); **duplicate ticket = skip, not fail** (409 → "already in your
+  journal", so re-pasting is idempotent); **dates parsed by hand** as `DD/MM/YYYY` → UTC, never
+  `new Date(str)` which reads the browser locale; and it **submits through the same `createTrade`
+  service** as everything else, one write path. The parser is pure and verified against the real paste
+  (P&L reconciles). CSV *file* import
+  is still deferred — paste covers the manual case.
 - **Trade table columns live in one file, rendered by both tables.** The dashboard's Recent activity
   and the `/trades` ledger had drifted: the glance was missing **Entry** and **Exit** and used
   different headers (`Closed`/`Asset`/`Direction` vs `Open / close`/`Symbol`/`Type`), because each
@@ -431,6 +455,17 @@ See build-plan.md for the full per-phase breakdown.
   `["all", "today", "7d", "30d"]` (`lib/filters.ts`) so the un-seeded frame already resolves to the chip
   it settles on — no flip. Per-click behaviour (Today / 7d / 30d) is unchanged; only the ambiguous
   all-covering and un-seeded cases now prefer "All time".
+
+- **CSV export of the filtered ledger — server-side, papaparse** *(2026-07-17)*. `GET
+  /api/trades/export?<filters>` reuses `enrichTrades → filterTrades` (same `index`/`balanceAfter`/sort,
+  no page slice) and streams a `text/csv` attachment built with `Papa.unparse({ fields, data })`
+  (headers even when empty; papaparse escaping). Route uses `@Res()` to bypass the `{success,message,
+  data}` envelope. Frontend `ExportCsvButton` (outline, on `/trades` beside Add trade) builds the URL
+  from `filtersToParams` and clicks a transient `<a>` — no client-side CSV work, file matches the
+  on-screen view. `papaparse` added to **backend** deps (generation is server-side, honouring the
+  clean-frontend rule). 16 columns: Index, Ticket, Symbol, Side, Status, Opened/Closed At, Hold Time,
+  Entry/Exit, Pips, Size, Gross/Fees/Net P&L, Balance After. Live-verified (headers + rows + PROFIT
+  filter). See engineering/backend.md → "Bypass the response envelope for file downloads".
 
 ---
 

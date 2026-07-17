@@ -91,9 +91,19 @@ Items are only ticked when the code actually lands.
       the existing filters. `accountId` is **optional**: the service resolves the singleton account,
       so the client never handles an id. **CSV import not started** (validate rows, dedupe on
       `ticket` via `@@unique([accountId, ticket])`, idempotent).
-- [~] Frontend `trades.service` + **add/edit/delete trade forms done** (`TradeFormDialog`, RHF + Zod
-      mirroring the DTO) + confirm-before-delete via the `confirm()` store; two empty states
-      (no trades at all vs. no filter matches). **CSV import not started.**
+- [~] Frontend `trades.service` + **delete done** (confirm-before-delete via the `confirm()` store),
+      two empty states (no trades at all vs. no filter matches). **The add/edit field form was removed
+      2026-07-17** — adding is paste-only (below), editing is gone (a correction is delete-and-repaste).
+- [x] **Paste import — the only way to add a trade** *(2026-07-17)* — `AddTradeDialog` is a tall,
+      paste-only dialog; `lib/parse-trades.ts` reads the broker's 12-line-per-trade block, previews the
+      parsed rows, and imports through the same `createTrade` service (duplicate ticket → 409 →
+      "already in journal", idempotent). **CSV *file* import still not started** — paste covers the
+      manual case.
+- [x] **Live refresh after a mutation** *(2026-07-17)* — a `dataVersion` counter in the filters store,
+      bumped by `notifyDataChanged()` on every add/delete, is a fetch-dep of `useCockpit`/`useTrades`,
+      so the table and panels update without a manual page reload (it also reopens the date window so a
+      newly-added trade dated after the old max is visible). Verified in a browser: paste → table
+      20 → 21 live, no refresh, no console errors.
 - [x] Settings page (`/settings`) — edits `startingBalance`/`currency` via `PATCH /api/accounts/:id`.
       Added beyond the original plan: the seed is now opt-in, so the starting balance the equity curve
       is measured from needs a home in the UI. Supersedes the "no settings page" note in Phase 1.
@@ -141,6 +151,12 @@ Items are only ticked when the code actually lands.
       colour), asset performance (`BarChart layout="vertical"`), long-vs-short (`BarChart`), win/loss
       (`PieChart` + `innerRadius` donut). Colours are `var(--color-*)` — no JS palette copy.
       **Verified in a browser:** all seven render, 10 recharts surfaces, zero console errors.
+- [x] **All dates render DD-MM-YYYY, app-wide** *(2026-07-18)* — every user-facing date goes through
+      `formatDate`: the trades table, paste preview, delete copy/aria (already), plus now the **Daily
+      P&L chart axis + tooltip** (via a new `formatCategory` prop on `SignedBarChart`) and the
+      **calendar day tooltips** (`DayCell.cellTitle`). ISO stays internal (map keys, sort, range
+      compares). Verified in a browser: daily axis reads `11-07-2026 / 14-07-2026 / 17-07-2026`,
+      calendar titles `01-07-2026, …`.
 - [~] **Known chart defects, not yet fixed:**
   - Equity curve Y axis anchors at `0` (recharts' `YAxis` default is `[0, dataMax]`), so a
     $900–$1,200 history renders as a flat line in the top fifth of the panel. The reference design's
@@ -193,7 +209,8 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
       marker) and deliberately departs from where it is weaker (written-out weekday heads, P&L
       intensity, trade counts). Note `designs/website.index.html` — the wireframe every doc cites — is
       **no longer in the repo**, and the three saved `app.tradefxbook.com_*.png` builds cover only
-      dashboard / trades / analysis. Insights + leaderboard remain.
+      dashboard / trades / analysis. The asset leaderboard remains; the **Risk & edge insights**
+      placeholder was removed from `/analytics` *(2026-07-17)* at the user's request.
 
 ---
 
@@ -203,7 +220,9 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
       panel recomputes off the filtered set. **Still missing:** search, asset/direction selects,
       explicit from/to date inputs, min/max P&L, and sort. The store and `filterTrades` already
       support all of them; only the UI is absent.
-- [ ] Risk & edge insight cards + per-symbol asset leaderboard (proportional bars).
+- [~] Per-symbol asset leaderboard (proportional bars). **Risk & edge insight cards were dropped**
+      *(2026-07-17)* — the placeholder was removed from `/analytics` at the user's request; the
+      leaderboard is what remains of this line.
 - [x] **Calendar heatmap** — `CalendarHeatmap` + pure `lib/calendar.ts`, built then **redesigned the
       same day** against the TradeFXBook "Monthly P&L" reference the user supplied (the first calendar
       reference this project has had). Month → weeks → days, **Monday-first**, with a **weekly totals
@@ -243,7 +262,16 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
 
 ## Phase 6 — Export, Summary & Accent Theme
 
-- [ ] Export CSV of the filtered set (client-side `Blob` download).
+- [x] **Export CSV of the filtered set** *(2026-07-17)* — **server-side**, not the originally-planned
+      client-side `Blob`. `GET /api/trades/export?<filters>` reuses the table's `enrich → filter`
+      pipeline (same `index`/`balanceAfter`/`sortBy`, no page slice) and streams a `text/csv`
+      attachment built with **papaparse** (`Papa.unparse`, correct escaping). The route takes `@Res()`
+      so the global envelope is bypassed and the body stays raw CSV. Frontend `ExportCsvButton`
+      (outline, on `/trades` beside Add trade) builds the URL from the same `filtersToParams` and
+      triggers a transient-anchor download — no client-side CSV work, and the file always matches the
+      on-screen view. Chosen over client-side to keep the frontend calculation-free and avoid pulling
+      the whole (unpaginated) set into the browser. Live-verified: headers + rows + `?result=PROFIT`
+      filter. Supersedes the "client-side Blob" note here and in library-docs.
 - [ ] Copy Summary (plain-text performance summary of the active view) via clipboard + toast.
 - [ ] Accent-theme switcher (green/violet/gold) writing `body[data-accent]`, persisted.
 
@@ -269,7 +297,7 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
 | 3 — Metrics, Overview & Stats           | **Done** — metrics module, filters/store, services, Overview, 27 stat cards |
 | 4 — Charts (recharts)                   | **Built** — all seven render; three known defects open (see Phase 4) |
 | 4.5 — Multi-page redesign               | **In progress** — routes + nav + Overview done; token rebuild and Filters open |
-| 5 — Filters, Insights, Calendar, Table  | **Partial** — trades table + calendar heatmap done; filter chips partial; insights + leaderboard not started |
+| 5 — Filters, Insights, Calendar, Table  | **Partial** — trades table + calendar heatmap done; filter chips partial; Risk & edge insights dropped (2026-07-17); asset leaderboard not started |
 | 6 — Export, Summary & Accent Theme      | Not started — `AccentSwitcher` exists; Export CSV / Copy Summary do not |
 | 7 — Polish                              | Not started   |
 

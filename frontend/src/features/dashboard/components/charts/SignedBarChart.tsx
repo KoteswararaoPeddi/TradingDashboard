@@ -29,6 +29,12 @@ interface Props<T> {
   radius?: number;
   /** Category axis label width, horizontal mode only. */
   categoryWidth?: number;
+  /**
+   * Formats the category value for the axis ticks and the tooltip label — e.g.
+   * the daily chart's ISO `date` rendered as DD-MM-YYYY. Left generic so the
+   * chart stays reusable; the raw value is kept for sorting, only display changes.
+   */
+  formatCategory?: (value: string) => string;
 }
 
 /**
@@ -49,6 +55,7 @@ export function SignedBarChart<T extends object>({
   name,
   radius = 6,
   categoryWidth = 64,
+  formatCategory,
 }: Props<T>) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -69,16 +76,30 @@ export function SignedBarChart<T extends object>({
               tickLine={false}
               axisLine={false}
               width={categoryWidth}
+              tickFormatter={formatCategory}
             />
           </>
         ) : (
           <>
-            <XAxis dataKey={categoryKey} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={4} />
+            <XAxis
+              dataKey={categoryKey}
+              tick={AXIS_TICK}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={formatCategory}
+              // Dates render 10 chars wide, so give ticks room; other categories
+              // (weekday, hour) are short and pack tight.
+              minTickGap={formatCategory ? 28 : 4}
+            />
             <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={moneyAxisTick} width={56} />
           </>
         )}
 
-        <Tooltip {...TOOLTIP_PROPS} formatter={(value) => [moneyTooltip(Number(value)), name]} />
+        <Tooltip
+          {...TOOLTIP_PROPS}
+          labelFormatter={formatCategory ? (label) => formatCategory(String(label)) : undefined}
+          formatter={(value) => [moneyTooltip(Number(value)), name]}
+        />
 
         <Bar dataKey={valueKey} radius={radius} isAnimationActive={false}>
           {data.map((entry, i) => (

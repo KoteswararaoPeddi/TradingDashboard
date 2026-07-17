@@ -5,7 +5,6 @@ import { Skeleton } from "@components/ui/skeleton";
 import { useCockpit } from "../hooks/use-cockpit";
 import { Charts } from "./charts/Charts";
 import { FilterChips } from "./filters/FilterChips";
-import { SectionPlaceholder } from "./SectionPlaceholder";
 import { AnalyticsKpis } from "./stats/AnalyticsKpis";
 import { Stats } from "./stats/Stats";
 
@@ -37,12 +36,6 @@ export function AnalyticsPage() {
 
       <Stats />
       <Charts />
-
-      <SectionPlaceholder
-        id="insights"
-        title="Risk & edge insights"
-        description="Best and worst asset, hour and weekday, plus drawdown recovery."
-      />
     </div>
   );
 }

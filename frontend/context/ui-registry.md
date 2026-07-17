@@ -46,7 +46,7 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 
 | Component | File | Notes |
 | --------- | ---- | ----- |
-| Button | `ui/button.tsx` | cva. Variants: default/outline/secondary/ghost/destructive/link; sizes xs–lg + icon. Default = brand: `bg-primary text-primary-fg`; primary CTA uses the green→blue gradient (Export CSV). Outline/ghost for secondary (Copy Summary, Reset). |
+| Button | `ui/button.tsx` | cva. Variants: default/outline/secondary/ghost/destructive/link; sizes xs–lg + icon. Default = brand: `bg-primary text-primary-fg` (the page's single primary, e.g. **Add trade**). Outline/ghost for secondary (**Export CSV**, Copy Summary, Reset) so one region has one primary. |
 | Card / Panel | `ui/card.tsx` | Base surface: `rounded-lg border border-border bg-surface shadow-panel overflow-hidden`. The dashboard **Panel** composite (below) wraps this with the header/body structure. `bg-card` resolves to `--surface`. |
 | Badge | `ui/badge.tsx` | cva chip, `rounded-full`. The trading **SideBadge** / **ResultBadge** (below) are the semantic variants — LONG green / SHORT blue / LIQUIDATION red; Profit green / Loss red / Breakeven grey. |
 | Separator | `ui/separator.tsx` | Token `bg-border` rule; `h-px w-full` / `w-px h-full`. |
@@ -465,7 +465,7 @@ File: `components/trades/TradesTable.tsx` · `components/overview/RecentTrades.t
 | P&L cell | `text-right font-bold tabular-nums` + `text-up`/`text-down` by sign, with an explicit `+` |
 | Side cell | `font-semibold` + LONG `text-up` · SHORT `text-info` · LIQUIDATION `text-down` |
 | Empty state | **`shared/components/EmptyState`** — `icon` + `message` + `action`; the caller positions it (`className="m-4.5"`) |
-| Row actions cell *(2026-07-17)* | `flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100`; `Button variant="ghost" size="icon"`; delete adds `text-subtle-foreground hover:text-down`. Row gains `group`; `th` is `<span className="sr-only">Actions</span>` |
+| Row actions cell *(2026-07-17; edit removed, delete-only)* | `flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100`; a single delete `Button variant="ghost" size="icon"` + `text-subtle-foreground hover:text-down`. Row gains `group`; `th` is `<span className="sr-only">Actions</span>` |
 | Footer / pager *(2026-07-17)* | `TradesPagination` — `flex flex-wrap items-center justify-between gap-4 border-t border-border p-4.5`; `Showing {from}–{to} of {total}` + shadcn `Pagination`. Page buttons `Button variant="default"` when current (+ `aria-current="page"`), `ghost` otherwise |
 
 **Pattern notes:**
@@ -486,8 +486,17 @@ File: `components/trades/TradesTable.tsx` · `components/overview/RecentTrades.t
   tabbing and `max-md:opacity-100` keeps them permanent on touch. Each button carries an
   `aria-label` naming the trade ("Delete BTCUSD trade from 2026-07-15") — nine identical "Delete"
   buttons are useless in a screen-reader's element list.
-- **One dialog per table, not per row.** `TradesTable` holds `editing: EnrichedTrade | undefined` and
-  mounts a single `TradeFormDialog`; a dialog inside `Row` would mount one per visible row.
+- **Rows are delete-only** *(2026-07-17)*. The edit (pencil) action was removed with the edit form —
+  adding is paste, and a correction is delete-and-repaste. `TradeRow` takes no `onEdit`; the add
+  dialog lives once on `TradesPage`, not per row.
+- **Export CSV is a ledger-wide action, server-generated** *(2026-07-17)*. `ExportCsvButton`
+  (`components/trades/ExportCsvButton.tsx`, `variant="outline" size="sm"` + `Download` icon) sits in the
+  `TradesPage` header beside **Add trade** — grouped in a `flex items-center gap-2`, Export outline so
+  Add trade stays the one primary. It does **no CSV work**: it builds `${NEXT_PUBLIC_API_URL}/trades/
+  export?<filtersToParams>` and clicks a transient `<a>`; the backend streams a `text/csv` attachment
+  (papaparse) and its `Content-Disposition` names the file. Because it sends the *same* filter params as
+  the table, the download always matches the on-screen view. No `download` attr needed (ignored
+  cross-origin anyway) — the server header forces the save.
 - **Deleting is confirmed** via the imperative `confirm()` store, and the copy states the real
   consequence — the running balance of every later trade shifts, because `balanceAfter` is cumulative.
 - **Pagination is 50 rows a page** *(2026-07-17, replaced `Load more`)*. Maths lives in the pure
@@ -631,16 +640,71 @@ everywhere → server; sums that only describe this layout → client. The **tin
 Chart defaults (grid `rgba(255,255,255,.055)`, tick `--muted`, tooltip on `--surface`) live in
 `shared/config/chart-theme.ts`; **read palette from token CSS vars** so the accent theme stays synced.
 
+**`SignedBarChart` (daily / weekday / hourly / asset)** takes an optional **`formatCategory`** prop
+that formats the category value for both the axis ticks and the tooltip label. The **Daily P&L** chart
+passes `formatDate`, so its ISO `date` renders **DD-MM-YYYY** (per ui-rules.md → date rule); the axis
+widens its `minTickGap` when a formatter is present, since dates are 10 chars vs a weekday's 3. The raw
+value is untouched — only display changes.
+
 ---
 
-## Form pattern (RHF + Zod + Field + toast) *(built 2026-07-17 — add/edit-trade + settings)*
+## Paste-import trades *(built 2026-07-17)*
 
-The project's **one form shape**. Realised by `TradeFormDialog` (add + edit) and `SettingsPage`.
-Build every new form to match.
+Files: `components/trades/TradePasteImport.tsx` · pure parser `lib/parse-trades.ts` · dialog wrapper
+`components/trades/AddTradeDialog.tsx`. **Paste is the *only* way to add a trade** *(2026-07-17)* —
+there is no field form and no edit mode. `AddTradeDialog` is a tall (`min-h-[70vh] max-h-[92vh]`)
+paste-only dialog; the textarea `flex-1`-grows to fill it so a multi-trade block has room without
+inner scrolling. A trade arrives from a broker as a block, so pasting is the whole input path;
+corrections are delete-and-repaste, not an edit form.
 
-Files: `features/dashboard/components/trades/TradeFormDialog.tsx` ·
-`features/dashboard/components/SettingsPage.tsx` ·
-`features/dashboard/schemas/trade.schema.ts` · `features/dashboard/schemas/settings.schema.ts`
+Add trades by pasting a broker's history instead of retyping them into the form. The dialog gets a
+shadcn `Tabs` header (`Form | Paste`); the Paste panel is a `Textarea` (`font-mono`) → live preview →
+`Import`.
+
+| Property | Class / behaviour |
+| -------- | ----------------- |
+| Textarea | `Textarea` primitive, `font-mono text-body-sm`, `rows={8}` |
+| Preview well | `rounded-lg border border-border-soft bg-surface-well`; a scrollable `max-h-48` list, one row per parsed trade (side-coloured, symbol, close date, signed P&L) |
+| Error well | `border-down/40 bg-down/8`; per-block reason (`Trade 3: …`) |
+| Footer | `Cancel` (outline) + `Import N trades` (default), disabled until ≥1 parses |
+
+**Pattern notes:**
+
+- **The parser is pure and lives in `lib/`** (`parseTrades(text)`), not the component. It reads the
+  broker's **12-line-per-trade** block, ignores blank lines between blocks, and returns
+  `{ trades, errors }` — never throws. Verified against the real paste: both trades parse and the P&L
+  reconciles against entry/exit/size.
+- **Preview-first, always.** Parse is live and rows render before anything is written — a mis-pasted
+  block is caught by eye, not discovered in the journal. Anything unparseable is reported per-block,
+  never silently dropped, because this writes to the journal.
+- **A duplicate ticket is a skip, not a failure.** The unique constraint returns a 409; the importer
+  counts it as "already in your journal" and re-pasting the same block is safe (idempotent). Other
+  errors are counted as failures and leave the text in place to fix.
+- **Dates are parsed by hand** (`DD/MM/YYYY HH:MM:SS` → UTC), not through `new Date(str)`, which reads
+  an ambiguous `DD/MM` in the browser's locale. Side `S`/`B` → SHORT/LONG; the fee `open/close` pair
+  is summed; size is kept as the raw `requested/filled` string.
+- **Submits through the same `createTrade` service everywhere** — one write path. After a successful
+  import it calls **`notifyDataChanged()`** (client panels refetch) **and** `router.refresh()` (the
+  server seed the sidebar reads) — see "Live refresh after a mutation" below.
+
+### Live refresh after a mutation *(2026-07-17)*
+
+The backend owns the numbers, so `useCockpit` and `useTrades` refetch on a **filter** change — but an
+add/edit/delete changes no filter, and `router.refresh()` alone doesn't help (the hooks seed the
+server payload through `useState`, which ignores prop updates). So a **`dataVersion` counter** lives in
+the filters store; `notifyDataChanged()` bumps it, and both data hooks include it in their fetch deps.
+Every mutation calls it. It also **clears the date window** (`from`/`to` → "") so a trade dated after
+the old maximum is not filtered out of its own "it was added" confirmation; the window re-seeds from
+the next analytics fetch. Without this, a just-added trade only appeared after a manual page reload.
+
+## Form pattern (RHF + Zod + Field + toast) *(built 2026-07-17 — settings; trade add is paste-only)*
+
+The project's **one form shape**. Now realised only by `SettingsPage` — the trade add/edit form was
+removed (adding is paste, editing is gone). Build every new form to match this shape.
+
+Files: `features/dashboard/components/SettingsPage.tsx` ·
+`features/dashboard/schemas/settings.schema.ts`
+*(`TradeFormDialog.tsx` and `schemas/trade.schema.ts` were deleted 2026-07-17 with the trade form.)*
 
 | Property | Class |
 | -------- | ----- |

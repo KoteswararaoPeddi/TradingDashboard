@@ -176,11 +176,14 @@ consistency matters more than any single choice.
 9. **Sentence case** — ✅ "Add trade" / ❌ "Add Trade". (Uppercase micro-labels like `WIN RATE` are a
    deliberate styling choice via `uppercase`, not written in caps.)
 10. **Reduce cognitive load** — one refined thought; don't make users read more than necessary.
-11. **Dates display as DD-MM-YYYY** — always via `formatDate` from `@lib/format`, never a raw
-    `iso.slice(0, 10)` at the call site. Times stay 24-hour `HH:MM`. This is a *display* rule only:
-    sorting, grouping and filtering keep the raw ISO string, which orders correctly as text where
-    DD-MM-YYYY does not. `datetime-local` inputs render in the browser's own locale format and are
-    outside this rule.
+11. **Dates display as DD-MM-YYYY, everywhere** — always via `formatDate` from `@lib/format`, never a
+    raw `iso.slice(0, 10)` or `dayKey` at the call site. This covers the trades table, the paste
+    preview, delete copy + aria-labels, the **Daily P&L chart axis and tooltip** (`SignedBarChart`'s
+    `formatCategory` prop), and the **calendar day tooltips** (`DayCell.cellTitle`). Times stay 24-hour
+    `HH:MM`; month headings stay month-name (`July 2026`). This is a *display* rule only: sorting,
+    grouping, `dayKey` map keys, and filter range comparisons keep the raw ISO string, which orders
+    correctly as text where DD-MM-YYYY does not. `datetime-local`/`date` inputs render in the browser's
+    own locale and are outside this rule (there are currently none in the app).
 
 **Never use a long hyphen (em dash `—` or en dash `–`) in UI content.** Use a comma, or rewrite as a
 separate sentence.

@@ -281,11 +281,20 @@ by the specific filter and never fall through to the generic 500.
 
 ## CSV import / export
 
-- **Export** (frontend): the design builds a CSV of the **filtered** trade set client-side (`Blob` +
-  object URL + download link) — reuse a small `shared/lib/csv.ts` helper; no library needed.
+- **Export** (**backend**, `papaparse`) *(2026-07-17 — moved server-side; supersedes the client-side
+  `Blob` plan)*: `GET /api/trades/export?<filters>` streams the **filtered** ledger as a `text/csv`
+  attachment. It reuses the table's `enrich → filter` pipeline (so `index`/`balanceAfter`/sort match the
+  screen; no page slice) and builds the file with `Papa.unparse({ fields, data })` — the `{fields,data}`
+  form so the header row is emitted even for an empty result, and papaparse owns escaping (a comma or
+  quote in a symbol/ticket can't corrupt a row). The route takes `@Res() res: express.Response` and
+  `res.send(csv)`, which puts Nest in manual-response mode so the global `ResponseInterceptor` envelope
+  is skipped and the body stays raw CSV. The frontend never shapes a cell — `ExportCsvButton` builds the
+  URL from `filtersToParams` and clicks a transient `<a>`; the server's `Content-Disposition` names and
+  saves the file (no `Blob`, no whole-set fetch). **papaparse is isomorphic** — the same lib parses on
+  import and unparses on export; it lives in the **backend** deps here because generation is server-side.
 - **Import** (backend or frontend parse): a broker CSV maps to `CreateTradeDto[]`; validate every row,
   scope to the target `accountId`, and dedupe on `ticket` (`@@unique([accountId, ticket])`) so
-  re-importing is idempotent. Prefer native parsing / a tiny parser before adding a CSV dependency.
+  re-importing is idempotent. `papaparse`'s `parse` is the natural fit when file import lands.
 
 ---
 

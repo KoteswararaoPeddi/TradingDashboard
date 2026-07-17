@@ -31,6 +31,9 @@ interface TradesView {
 export function useTrades(page: number, limit = 50): TradesView {
   const { status, error: seedError, initialTradesPage } = useDashboardData();
   const filters = useFiltersStore((s) => s.filters);
+  // A mutation bumps this; refetching on it is how the table shows a just-added
+  // trade without a manual page refresh.
+  const dataVersion = useFiltersStore((s) => s.dataVersion);
 
   const [data, setData] = useState<TradesPage | null>(initialTradesPage);
   const [error, setError] = useState<string | null>(seedError);
@@ -55,7 +58,7 @@ export function useTrades(page: number, limit = 50): TradesView {
     return () => {
       cancelled = true;
     };
-  }, [filters, page, limit, status]);
+  }, [filters, page, limit, status, dataVersion]);
 
   return {
     status,

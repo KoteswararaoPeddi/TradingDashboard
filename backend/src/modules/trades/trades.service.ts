@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Trade, TradingAccount } from "@prisma/client";
+import Papa from "papaparse";
 
 import { toNumber } from "../../common/money";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -9,6 +10,34 @@ import { FindTradesDto } from "./dto/find-trades.dto";
 import { UpdateTradeDto } from "./dto/update-trade.dto";
 import { PaginatedTrades, TradeEntity } from "./entities/trade.entity";
 import { enrichTrades, filterTrades } from "./trades.logic";
+
+/** 2dp so the CSV carries clean money, not float-addition noise from the running balance. */
+function money(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+/**
+ * The export's columns, in order. One list drives both the header row and each
+ * data row, so a column can never appear in one and not the other.
+ */
+const CSV_COLUMNS = [
+  "Index",
+  "Ticket",
+  "Symbol",
+  "Side",
+  "Status",
+  "Opened At",
+  "Closed At",
+  "Hold Time",
+  "Entry Price",
+  "Exit Price",
+  "Pips",
+  "Size",
+  "Gross P&L",
+  "Fees",
+  "Net P&L",
+  "Balance After",
+] as const;
 
 @Injectable()
 export class TradesService {
@@ -54,6 +83,45 @@ export class TradesService {
       totalPages: Math.max(1, Math.ceil(filtered.length / limit)),
       accountTradeCount: enriched.length,
     };
+  }
+
+  /**
+   * The filtered ledger as a CSV string, for download.
+   *
+   * Reuses the exact `enrich → filter` pipeline the table uses (same account-wide
+   * `index`/`balanceAfter`, same `sortBy`), so the file always matches the on-screen
+   * view — just without the pagination slice, since an export is the whole set. The
+   * CSV is built with the same one column list for header and rows, and papaparse
+   * owns the escaping (a symbol or ticket with a comma or quote can't corrupt it).
+   */
+  async exportCsv(query: FindTradesDto): Promise<string> {
+    const account = await this.resolveAccount(query.accountId);
+    const rows = await this.prisma.trade.findMany({ where: { accountId: account.id } });
+    const enriched = enrichTrades(rows.map(TradeEntity.from), toNumber(account.startingBalance));
+    const filtered = filterTrades(enriched, query);
+
+    const data = filtered.map((e) => [
+      e.index,
+      e.trade.ticket ?? "",
+      e.trade.symbol,
+      e.trade.side,
+      e.trade.status,
+      e.trade.openedAt ? e.trade.openedAt.toISOString() : "",
+      e.trade.closedAt.toISOString(),
+      e.holdTime ?? "",
+      e.trade.entryPrice ?? "",
+      e.trade.exitPrice ?? "",
+      e.pips == null ? "" : money(e.pips),
+      e.filledSize ?? "",
+      money(e.trade.grossPnl),
+      money(e.trade.fees),
+      money(e.trade.netPnl),
+      money(e.balanceAfter),
+    ]);
+
+    // The `{ fields, data }` form always emits the header row — even for an empty
+    // result, so a filter that matches nothing downloads headers, not a blank file.
+    return Papa.unparse({ fields: [...CSV_COLUMNS], data });
   }
 
   /** Resolve an explicit account (404 if unknown) or the journal's default one. */

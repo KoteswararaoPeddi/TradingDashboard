@@ -252,3 +252,51 @@ render this one layout?"*
 5. **Rule of thumb** — If a second client would need the same number, compute it server-side; if a
    restyle would change it, leave it on the client. "Must be correct everywhere" → backend; "only helps
    render" → frontend. Never ship colours, widths, or opacities from the API.
+
+---
+
+## Bypass the response envelope with `@Res()` for file downloads *(2026-07-17)*
+
+**What / Where / Why.** CSV export (`GET /trades/export`) had to return a raw `text/csv` body, but a
+global `ResponseInterceptor` wraps *every* handler return in `{ success, message, data }`. Rather than
+special-case the interceptor, the handler injects the platform response with `@Res() res` and calls
+`res.send(csv)` itself — injecting `@Res()` (without `passthrough: true`) puts Nest in **manual-response
+mode**, so it never serialises a return value and the interceptor's mapped output is simply discarded.
+The route also reuses the *exact* `enrichTrades → filterTrades` pipeline the JSON table uses, so the
+file matches the on-screen view instead of being a second, drifting query.
+
+**Learn block**
+
+1. **Vocabulary** — *Response interceptor*: cross-cutting code that transforms every handler's return
+   before it's sent (here, the envelope). *Manual-response mode*: when you take the raw `res` object,
+   the framework steps back and assumes you'll end the response yourself.
+
+2. **❌ naive vs ✅ our real code**
+   ```ts
+   // ❌ naive — return the string; the global interceptor wraps it:
+   //   { success:true, message:"OK", data:"Index,Ticket,...\n1,#123,..." }
+   //   → not a CSV, and the browser saves JSON
+   @Get("export") export() { return this.trades.exportCsv(query) }
+
+   // ✅ ours — take the response, set the headers, send raw; envelope skipped
+   @Get("export")
+   async export(@Query() q: FindTradesDto, @Res() res: Response) {
+     const csv = await this.trades.exportCsv(q)
+     res.setHeader("Content-Type", "text/csv; charset=utf-8")
+     res.setHeader("Content-Disposition", `attachment; filename="trades-${stamp}.csv"`)
+     res.send(csv)
+   }
+   ```
+
+3. **Plain-english why** — A global interceptor is the right default (uniform JSON), but a file download
+   is the one case where uniformity is *wrong* — the client wants bytes, not a JSON wrapper around a
+   stringified file. `@Res()` is the escape hatch: one route opts out without weakening the rule for the
+   other 99%. Note the trade-off — you've now taken responsibility for ending the response, and other
+   interceptors on that route are also bypassed, so use it only where you truly need raw control.
+
+4. **Where else you'd use this** — streaming a PDF/zip/image; Server-Sent Events or a chunked stream;
+   a webhook that must echo an exact plaintext challenge; a health endpoint a load balancer wants as
+   bare `OK`; any proxy/redirect where you set the status and headers yourself.
+
+5. **Rule of thumb** — Keep the global envelope for data; drop to `@Res()` for bytes. When a route's
+   contract is "a file", not "a JSON payload", take the response object and own it end to end.

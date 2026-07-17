@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,17 +12,18 @@ import { getErrorMessage } from "@lib/get-error-message";
 import { confirm } from "@shared/stores/confirm.store";
 
 import { deleteTrade } from "../../api/trades.service";
+import { useFiltersStore } from "../../stores/filters.store";
 import type { EnrichedTrade } from "../../types/trade.types";
 import { TradeRowCells } from "./trade-columns";
 
 interface Props {
   trade: EnrichedTrade;
-  onEdit: () => void;
 }
 
-/** One ledger row: the shared cells, plus the actions only /trades carries. */
-export function TradeRow({ trade, onEdit }: Props) {
+/** One ledger row: the shared cells, plus the delete action only /trades carries. */
+export function TradeRow({ trade }: Props) {
   const router = useRouter();
+  const notifyDataChanged = useFiltersStore((s) => s.notifyDataChanged);
   const [busy, setBusy] = useState(false);
 
   async function onDelete(): Promise<void> {
@@ -38,6 +39,7 @@ export function TradeRow({ trade, onEdit }: Props) {
     setBusy(true);
     try {
       await deleteTrade(trade.id);
+      notifyDataChanged();
       router.refresh();
       toast.success("Trade deleted.");
     } catch (error) {
@@ -55,15 +57,7 @@ export function TradeRow({ trade, onEdit }: Props) {
         {/* Visible on hover on a pointer, but always present for keyboard and
             touch: `group-hover`-only actions are unreachable without a mouse.
             focus-within keeps them up while tabbing through them. */}
-        <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onEdit}
-            aria-label={`Edit ${trade.symbol} trade from ${formatDate(trade.closedAt)}`}
-          >
-            <Pencil className="size-4" aria-hidden />
-          </Button>
+        <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
           <Button
             variant="ghost"
             size="icon"

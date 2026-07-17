@@ -10,10 +10,8 @@ import { Table, TableBody, TableHeader, TableRow } from "@components/ui/table";
 
 import { useTrades } from "../../hooks/use-trades";
 import { useFiltersStore } from "../../stores/filters.store";
-import type { EnrichedTrade } from "../../types/trade.types";
 import { Panel } from "../Panel";
 import { TRADE_TABLE_MIN_WIDTH, TradeHeadCells } from "./trade-columns";
-import { TradeFormDialog } from "./TradeFormDialog";
 import { TradeRow } from "./TradeRow";
 import { TradesPagination } from "./TradesPagination";
 
@@ -25,7 +23,6 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
   const reset = useFiltersStore((s) => s.reset);
   const filters = useFiltersStore((s) => s.filters);
   const [page, setPage] = useState(1);
-  const [editing, setEditing] = useState<EnrichedTrade | undefined>(undefined);
 
   // A filter change re-scopes the set, so page 6 of the old view is meaningless in
   // the new one — go back to page 1. Adjusted *during render*, not in an effect, so
@@ -102,7 +99,7 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
 
             <TableBody>
               {rows.map((trade) => (
-                <TradeRow key={trade.id} trade={trade} onEdit={() => setEditing(trade)} />
+                <TradeRow key={trade.id} trade={trade} />
               ))}
             </TableBody>
           </Table>
@@ -117,14 +114,6 @@ export function TradesTable({ onAddTrade }: { onAddTrade?: () => void }) {
           />
         </>
       )}
-
-      {/* One dialog for the whole table rather than one per row: `editing` holds
-          which trade it is showing, so 500 rows do not mount 500 dialogs. */}
-      <TradeFormDialog
-        open={Boolean(editing)}
-        onOpenChange={(open) => !open && setEditing(undefined)}
-        trade={editing}
-      />
     </Panel>
   );
 }

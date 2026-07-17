@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from "@nestjs/common";
 import {
   ApiConflictResponse,
   ApiCreatedResponse,
@@ -6,8 +6,10 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiProduces,
   ApiTags,
 } from "@nestjs/swagger";
+import type { Response } from "express";
 
 import { CreateTradeDto } from "./dto/create-trade.dto";
 import { FindTradesDto } from "./dto/find-trades.dto";
@@ -62,6 +64,25 @@ export class TradesController {
   @Get()
   async findAll(@Query() query: FindTradesDto): Promise<{ message: string; data: PaginatedTrades }> {
     return { message: "OK", data: await this.trades.findAll(query) };
+  }
+
+  @ApiOperation({
+    summary: "Export trades as CSV",
+    description:
+      "Streams the filtered ledger as a downloadable CSV (all matching rows, not a page). Accepts " +
+      "the same filter params as GET /trades. Bypasses the JSON envelope — the body is raw CSV.",
+  })
+  @ApiProduces("text/csv")
+  @ApiOkResponse({ description: "A text/csv attachment of the filtered trades." })
+  // @Res() takes manual control of the response, so the global ResponseInterceptor's
+  // envelope is skipped and the body stays raw CSV. filename carries the export date.
+  @Get("export")
+  async exportCsv(@Query() query: FindTradesDto, @Res() res: Response): Promise<void> {
+    const csv = await this.trades.exportCsv(query);
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="trades-${stamp}.csv"`);
+    res.send(csv);
   }
 
   @ApiOperation({

@@ -1,7 +1,7 @@
 "use client";
 
 import { Typography } from "@components/ui/typography";
-import { formatCompactMoney, formatMoney } from "@lib/format";
+import { formatCompactMoney, formatDate, formatMoney } from "@lib/format";
 import { cn } from "@lib/utils";
 
 import { tintPercent, type CalendarDay } from "../../lib/calendar";
@@ -107,8 +107,10 @@ export function DayCell({ day, today }: Props) {
  * gets, since a coloured box says nothing.
  */
 function cellTitle(day: CalendarDay): string {
-  if (!day.inRange) return `${day.dayKey}, outside the selected range`;
-  if (day.pnl === null) return `${day.dayKey}, no trades`;
+  // dayKey stays ISO for keys and range comparisons; only its display is DD-MM-YYYY.
+  const date = formatDate(day.dayKey);
+  if (!day.inRange) return `${date}, outside the selected range`;
+  if (day.pnl === null) return `${date}, no trades`;
   const count = `${day.trades} ${day.trades === 1 ? "trade" : "trades"}`;
-  return `${day.dayKey}, ${count}, ${day.pnl >= 0 ? "+" : ""}${formatMoney(day.pnl)}`;
+  return `${date}, ${count}, ${day.pnl >= 0 ? "+" : ""}${formatMoney(day.pnl)}`;
 }

@@ -37,6 +37,9 @@ export function useCockpit(): Cockpit {
   const { status, error: seedError, account, initialAnalytics } = useDashboardData();
   const filters = useFiltersStore((s) => s.filters);
   const initRange = useFiltersStore((s) => s.initRange);
+  // A mutation bumps this; refetching on it is how every panel picks up a
+  // just-added trade without a manual page refresh.
+  const dataVersion = useFiltersStore((s) => s.dataVersion);
 
   const [metrics, setMetrics] = useState<AnalyticsResponse | null>(initialAnalytics);
   const [error, setError] = useState<string | null>(seedError);
@@ -57,6 +60,11 @@ export function useCockpit(): Cockpit {
         if (cancelled) return;
         setMetrics(res);
         setError(null);
+        // Repopulate the date window after a mutation cleared it (see the store's
+        // notifyDataChanged), so the inputs and presets have real bounds again —
+        // now including the new trade. Guarded on an empty range so seeding, which
+        // itself sets the bounds, cannot loop.
+        if (res.range.from && !useFiltersStore.getState().range.from) initRange(res.range);
       })
       .catch((e) => {
         if (!cancelled) setError(getErrorMessage(e));
@@ -67,7 +75,7 @@ export function useCockpit(): Cockpit {
     return () => {
       cancelled = true;
     };
-  }, [filters, status]);
+  }, [filters, status, dataVersion, initRange]);
 
   return {
     status,
