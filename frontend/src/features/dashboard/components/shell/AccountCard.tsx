@@ -1,8 +1,8 @@
 import { Typography } from "@components/ui/typography";
-import { cn } from "@lib/utils";
 import { formatMoney, formatPercent } from "@lib/format";
 
 import type { TradeMetrics } from "../../types/metrics.types";
+import { AccountMini } from "./AccountMini";
 
 interface Props {
   /**
@@ -28,29 +28,11 @@ export function AccountCard({ metrics }: Props) {
       </Typography>
 
       <dl className="mt-4 grid grid-cols-2 gap-2.5">
-        <Mini label="Net P&L" value={formatMoney(metrics.netProfit)} tone={metrics.netProfit >= 0 ? "up" : "down"} />
-        <Mini label="Growth" value={formatPercent(metrics.growth)} tone={metrics.growth >= 0 ? "up" : "down"} />
-        <Mini label="Win Rate" value={formatPercent(metrics.winRate)} />
-        <Mini label="Trades" value={String(metrics.totalTrades)} />
+        <AccountMini label="Net P&L" value={formatMoney(metrics.netProfit)} tone={metrics.netProfit >= 0 ? "up" : "down"} />
+        <AccountMini label="Growth" value={formatPercent(metrics.growth)} tone={metrics.growth >= 0 ? "up" : "down"} />
+        <AccountMini label="Win Rate" value={formatPercent(metrics.winRate)} />
+        <AccountMini label="Trades" value={String(metrics.totalTrades)} />
       </dl>
-    </div>
-  );
-}
-
-function Mini({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
-  return (
-    <div className="rounded-lg border border-border-soft bg-surface-well p-2.5">
-      <Typography as="dt" variant="label-sm" weight="extrabold" className="block text-muted-foreground uppercase">
-        {label}
-      </Typography>
-      <Typography
-        as="dd"
-        variant="h5"
-        weight="bold"
-        className={cn("mt-1 block", tone === "up" && "text-up", tone === "down" && "text-down")}
-      >
-        {value}
-      </Typography>
     </div>
   );
 }

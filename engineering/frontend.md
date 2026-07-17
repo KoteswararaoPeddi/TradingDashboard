@@ -641,3 +641,71 @@ render loop.
 **Rule of thumb:** If the server cannot know it, **say so in the server snapshot** — don't compute it
 in render and don't paper over it in an effect. Render must be a pure function of props and state,
 and the clock is neither.
+
+---
+
+## 2026-07-17 — Reset state during render, not in an effect
+
+**What:** When a filter changes, the ledger returns to page 1 by adjusting state *during render*,
+not in a `useEffect`.
+**Where:** `features/dashboard/components/trades/TradesTable.tsx`.
+**Why:** The reflex is `useEffect(() => setPage(1), [filters])`. It is the wrong tool, it paints the
+wrong rows for a frame, and `react-hooks/set-state-in-effect` rejects it.
+
+### Learn
+
+**Vocabulary**
+- **Derived state** — state that exists only because something else changed. `page` is real state (the
+  user picked it), but "page 1 after a filter change" is derived from `filters`.
+- **Commit** — the moment React writes a render's output to the DOM. Effects run *after* commit;
+  render-phase updates run *before* it.
+
+**❌ Naive — reset in an effect**
+
+```tsx
+const [page, setPage] = useState(1);
+useEffect(() => setPage(1), [filters]);
+// 1. filters change  -> render with page=6 against the NEW 2-page set
+// 2. commit          -> the browser paints... whatever page 6 of 2 pages is
+// 3. effect runs     -> setPage(1)
+// 4. re-render, commit again -> page 1
+// The user sees a frame of wrong rows. On a slow device, several.
+```
+
+**✅ Ours — adjust while rendering**
+
+```tsx
+const [page, setPage] = useState(1);
+const [prevFilters, setPrevFilters] = useState(filters);
+
+if (prevFilters !== filters) {
+  setPrevFilters(filters);
+  setPage(1);
+}
+```
+
+**Plain-english why:** Calling `setState` while rendering looks illegal, and it would be if you did
+it to *another* component. Doing it to your own is a documented React pattern: React notices the
+state changed before it has committed anything, throws away the in-progress output, and immediately
+re-runs the component with the new value. Nothing reaches the DOM in between, so there is no flash —
+the wrong page is never painted, not even for a frame. The effect version *always* paints it, because
+effects run after commit, by definition.
+
+The comparison is `prevFilters !== filters`, an identity check, and that only works because the
+filters object is replaced rather than mutated (zustand's `set({ filters: {...} })`). Mutate it in
+place and this silently never fires — the same trap that makes `useEffect` dependency arrays lie.
+
+The belt-and-braces half is that `pageSlice` clamps anyway. Two mechanisms for one problem sounds
+redundant, but they answer different questions: clamping keeps the render *valid* (never an empty
+page), the reset keeps it *correct* (page 1 is what you want after re-scoping).
+
+**Where else you'd use this**
+- Clearing a selected row when the list it indexes into is replaced.
+- Resetting a wizard step when the entity being edited changes.
+- Dropping a cached "expanded" set when its tree reloads.
+- Any `useEffect` whose whole body is `setSomething(...)` — that is the tell. It is not
+  synchronising with an external system, so it is not an effect's job.
+
+**Rule of thumb:** An effect that only calls `setState` is state you should have adjusted during
+render. Effects are for talking to the outside world; **reacting to your own props and state is just
+rendering.**

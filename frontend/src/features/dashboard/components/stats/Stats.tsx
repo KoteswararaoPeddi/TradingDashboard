@@ -1,11 +1,10 @@
 "use client";
 
-import { Skeleton } from "@components/ui/skeleton";
-
 import { useCockpit } from "../../hooks/use-cockpit";
 import { buildStatRows } from "../../lib/stat-rows";
 import { Panel } from "../Panel";
 import { Tile } from "../Tile";
+import { StatsSkeleton } from "./StatsSkeleton";
 
 /** The 27 core performance stats for the active view. */
 export function Stats() {
@@ -41,15 +40,5 @@ export function Stats() {
         ))}
       </div>
     </Panel>
-  );
-}
-
-function StatsSkeleton() {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <Skeleton key={i} className="h-30 rounded-lg border border-border" />
-      ))}
-    </div>
   );
 }

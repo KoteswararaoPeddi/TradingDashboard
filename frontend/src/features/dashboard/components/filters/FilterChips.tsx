@@ -3,11 +3,12 @@
 import { CheckCircle2, Layers, XCircle, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Typography } from "@components/ui/typography";
 import { cn } from "@lib/utils";
 
 import { activePeriod, activeResult, periodRange } from "../../lib/filters";
 import { useFiltersStore } from "../../stores/filters.store";
+import { FilterChip } from "./FilterChip";
+import { FilterGroup } from "./FilterGroup";
 import type { Period, ResultFilter } from "../../types/filter.types";
 
 const PERIODS: { id: Period; label: string }[] = [
@@ -47,23 +48,23 @@ export function FilterChips() {
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-      <Group label="Time period">
+      <FilterGroup label="Time period">
         {PERIODS.map((item) => (
-          <Chip
+          <FilterChip
             key={item.id}
             active={period === item.id}
             onClick={() => setFilters(periodRange(item.id, range))}
           >
             {item.label}
-          </Chip>
+          </FilterChip>
         ))}
-      </Group>
+      </FilterGroup>
 
-      <Group label="Filter by">
+      <FilterGroup label="Filter by">
         {RESULTS.map((item) => {
           const Icon = item.icon;
           return (
-            <Chip
+            <FilterChip
               key={item.id}
               active={result === item.id}
               // Direction and result are separate fields, so each chip must clear
@@ -78,55 +79,10 @@ export function FilterChips() {
             >
               <Icon className="size-3.5 shrink-0" aria-hidden />
               {item.label}
-            </Chip>
+            </FilterChip>
           );
         })}
-      </Group>
+      </FilterGroup>
     </div>
-  );
-}
-
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Typography
-        as="span"
-        variant="label-sm"
-        weight="semibold"
-        className="mr-1 tracking-wider text-subtle-foreground uppercase"
-      >
-        {label}
-      </Typography>
-      {children}
-    </div>
-  );
-}
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      // `aria-pressed` rather than a visual-only state: a toggle that only says
-      // "chosen" in colour says nothing to a screen reader.
-      aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-body-sm font-semibold transition-colors",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        active
-          ? "bg-primary text-primary-fg"
-          : "bg-surface-wash text-muted-foreground hover:bg-surface-raised hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }

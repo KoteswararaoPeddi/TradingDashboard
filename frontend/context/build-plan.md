@@ -215,9 +215,17 @@ around the daily 30-second check. See "Beyond-plan work" below for the full reco
       starts under Wed with 2 leading blanks, weeks read `+$46.1 (3 days)` / `+$120.3 (2 days)`,
       Winners re-tints to `+$481.89`, 7 days nets `+$36.57` and flips that week to `-$83.7`, zero
       console errors.
-- [x] **Trades table** (shadcn `Table`): hover rows, signed P&L + running balance, Load More paging
-      (24-row step), live count, horizontal scroll on mobile, empty state with `Clear filters`.
+- [x] **Trades table** (shadcn `Table`): hover rows, signed P&L + running balance, **pagination at 50
+      rows/page**, live count, horizontal scroll on mobile, empty state with `Clear filters`.
       **Not yet:** `SideBadge`/`ResultBadge` pills — side renders as coloured text for now.
+  - [x] **Pagination, 50/page** *(2026-07-17, replaced `Load more`)* — shadcn `pagination` primitive
+        CLI-installed; maths in the pure `lib/pagination.ts` (`pageSlice` clamps, `pageWindow` gives
+        `1 … 12 13 14 … 26`). Client-side by decision: the backend stays calculation-free, which a
+        benchmark supports (0.4ms per recompute at 19 trades, 22.7ms at 10k, 117ms at 50k).
+        **Verified:** 24 logic checks + a 120-trade mock API driven in a browser — 3 pages,
+        `Showing 101–120 of 120`, partial last page, next disabled at the end, and a filter change
+        returning to page 1. **On the real 19-trade journal it is a single page, so no page buttons
+        render** (as `Load more` never did at STEP 24).
   - [x] **Pips column** *(2026-07-17, beyond plan)* — added after Exit in the shared
         `trade-columns.tsx`, so **both** tables carry it. Raw `|exit - entry|` from
         `lib/trade-fields.ts`: unscaled, unsigned, untinted, `—` on a missing fill. Table min-width

@@ -6,6 +6,7 @@ import { Skeleton } from "@components/ui/skeleton";
 
 import { useCockpit } from "../../hooks/use-cockpit";
 import { ChartPanel } from "./ChartPanel";
+import { ChartsSkeleton } from "./ChartsSkeleton";
 
 /**
  * recharts is heavy and measures the DOM, so every chart is loaded on demand and
@@ -81,19 +82,5 @@ export function Charts() {
         </>
       )}
     </section>
-  );
-}
-
-function ChartsSkeleton() {
-  return (
-    <>
-      <Skeleton className="col-span-12 h-97.5 rounded-lg border border-border" />
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className="col-span-12 h-85 rounded-lg border border-border min-[781px]:col-span-6"
-        />
-      ))}
-    </>
   );
 }

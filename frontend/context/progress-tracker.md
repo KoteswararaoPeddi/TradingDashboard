@@ -339,6 +339,25 @@ See build-plan.md for the full per-phase breakdown.
   blocks. Rather than turning CSP off app-wide, `/api/docs` is exempted and every other path keeps the
   strict policy — the API serves only JSON, so the docs page is the sole HTML surface.
 - **No AI / no market feed / no execution** — this is a journal, not a terminal.
+- **Calculation stays on the client, and this was decided with numbers** *(2026-07-17)*. The question
+  was raised directly: should the backend own every calculation? It currently owns none — the only
+  arithmetic in the API is `netPnl + fees`, while ~822 lines of `lib/` compute a 44-field bundle in
+  the browser. **Measured before deciding:** one filter keystroke costs **0.4ms at 19 trades, 6ms at
+  1k, 22.7ms at 10k, 117ms at 50k**. A personal journal reaches 10k after 2-4 years of active
+  trading, so client compute is not the bottleneck the rule was guarding against, and moving it would
+  trade instant filtering for a round trip per keystroke. **Decision: keep client-side**; the
+  `analytics` endpoint stays the approval-gated Layer-6 option architecture.md already describes.
+  Revisit past ~25k trades. (`filters.ts` claiming "microseconds" is wrong — it is sub-ms at 19,
+  milliseconds at 1k.)
+- **Trades pagination is client-side, 50/page** *(2026-07-17)*. Follows directly from the decision
+  above: with the full set already in memory for the metrics, a server-paginated table would fetch
+  everything *anyway* and add a second call. `pageSlice` clamps the page — a filter can shrink the set
+  under a reader on page 9, and an unclamped slice renders a blank table that reads as "no results".
+- **One component per file is now enforced** *(2026-07-17)*. A review found 9 hand-written files
+  breaching `code-standards.md`, the worst being `CalendarHeatmap.tsx` at 405 lines / 6 components.
+  All split. **Skeletons are the usual culprit** — they are a second component and now live in their
+  own `XSkeleton.tsx`. The `ui/` primitives stay exempt: shadcn ships multi-component files and the
+  standard mandates its CLI, so hand-splitting one would be undone by the next `shadcn add`.
 - **The calendar's nav pages; the filter scopes** *(2026-07-17)*. The docs asked for both a "monthly
   heatmap" (ui-registry, build-plan) and "daily P&L across the selected range" (project-overview) —
   different features that only agree while the dataset spans one month. Settled: `FilterChips` decides

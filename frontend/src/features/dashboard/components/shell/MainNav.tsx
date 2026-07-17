@@ -1,51 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { cn } from "@lib/utils";
-import { APP_NAV, SETTINGS_NAV, type NavItem } from "@shared/config/app-nav.config";
+import { APP_NAV, SETTINGS_NAV } from "@shared/config/app-nav.config";
 
-/**
- * One sidebar row. Extracted so the pinned Settings link is the *same* control as
- * the four destinations rather than a lookalike that drifts out of sync.
- */
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
-  const Icon = item.icon;
-
-  return (
-    <Link
-      href={item.href}
-      // "page" rather than "true": this marks the current destination, which
-      // is what a screen reader should announce.
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "group relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-body-base font-semibold transition-colors",
-        active
-          ? "bg-primary/10 text-foreground"
-          : "text-muted-foreground hover:bg-surface-wash hover:text-foreground",
-      )}
-    >
-      {/*
-        The active row is marked three ways: a tinted surface, an accent
-        icon, and the dot. That is deliberate redundancy, not decoration —
-        colour alone would leave the state invisible to anyone who cannot
-        separate the accent from muted grey.
-      */}
-      <Icon
-        className={cn(
-          "size-4.5 shrink-0 transition-colors",
-          active ? "text-primary" : "text-subtle-foreground group-hover:text-muted-foreground",
-        )}
-        aria-hidden
-      />
-      {item.label}
-      {active ? (
-        <span className="ml-auto size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-      ) : null}
-    </Link>
-  );
-}
+import { NavLink } from "./NavLink";
 
 /**
  * Sidebar navigation across the app's pages.

@@ -56,8 +56,37 @@ dark semantic tokens (`bg-surface`, `border-border`, `text-foreground`, ring `--
 | Dialog | `ui/dialog.tsx` | **shadcn** (base-ui). Add-trade / edit-trade / confirm dialogs. Controlled via `open`/`onOpenChange`; built-in ✕ (`showCloseButton={false}` to hide). |
 | Table | `ui/table.tsx` | **shadcn**, CLI-installed. Ships its own `overflow-x-auto` container, so a `min-w-*` on the `<Table>` forces horizontal scroll on mobile rather than squashing columns. Used by `RecentTrades` (`min-w-160`); the full ledger will reuse it. Header cells are `font-medium text-muted-foreground`, **not** uppercase-black. |
 | DropdownMenu | `ui/dropdown-menu.tsx` | **shadcn** (base-ui). Row actions / overflow menus. (The user menu it also served is gone — no auth.) |
+| Pagination | `ui/pagination.tsx` | **shadcn**, CLI-installed *(2026-07-17)*. Use its `Pagination`/`PaginationContent`/`PaginationItem` wrappers (`nav` > `ul` > `li`) for any pager. **Its `PaginationLink` renders an `<a>`** for URL-driven paging — for client-side state put a `Button` in the `PaginationItem` instead; an anchor with no `href` is unreachable by keyboard. See `TradesPagination`. |
 | Skeleton | `ui/skeleton.tsx` | **shadcn** (`animate-pulse rounded-md bg-muted`). **Use for all loading placeholders** — pass geometry via `className`. Never hand-roll `animate-pulse` divs. |
 | Toaster | sonner (in `GlobalHosts`) | sonner `<Toaster position="top-right" richColors />` mounted once in root `layout.tsx`. Call `toast.loading/success/error` anywhere. |
+
+---
+
+## One component per file — enforced *(2026-07-17)*
+
+`code-standards.md` says **one component per file**, and a review found **9 hand-written files**
+breaching it (worst: `CalendarHeatmap.tsx` at 405 lines / 6 components). All 9 are now split; every
+hand-written `.tsx` in `features/` and `shared/components/` declares exactly one component.
+
+| Was | Now |
+| --- | --- |
+| `CalendarHeatmap.tsx` (405 lines, 6 comps + a hook + a pure fn) | `CalendarHeatmap` (128) · `MonthNav` · `WeekRow` · `WeekCell` · `DayCell` · `hooks/useTodayKey.ts` · `shared/components/EmptyState` |
+| `TradesTable.tsx` (2) | `TradesTable` · `TradeRow` · `TradesPagination` |
+| `FilterChips.tsx` (3) | `FilterChips` · `FilterGroup` · `FilterChip` |
+| `Charts.tsx` (3) | `Charts` · `ChartsSkeleton` |
+| `Overview.tsx` · `Stats.tsx` (2 each) | + `OverviewSkeleton` · `StatsSkeleton` |
+| `MainNav.tsx` (2) | `MainNav` · `NavLink` |
+| `AccountCard.tsx` (2) | `AccountCard` · `AccountMini` |
+
+**Pattern notes:**
+
+- **Skeletons get their own file** (`XSkeleton.tsx`) beside the component they mirror. They are a
+  second component by any definition, and they are the most common way this rule quietly breaks.
+- **The `ui/` primitives are exempt.** shadcn ships multi-component files (`dropdown-menu.tsx` has 15)
+  and `code-standards.md` *mandates* the CLI, so the two rules collide. The CLI output wins — never
+  hand-split a vendored primitive, it would be overwritten on the next `shadcn add`.
+- **A `dynamic()` `loading` arrow is not a component** — `const loading = () => <Skeleton/>` is an
+  option object's field, and lifting it to its own file would obscure that.
 
 ---
 
@@ -419,9 +448,9 @@ File: `components/trades/TradesTable.tsx` · `components/overview/RecentTrades.t
 | Numeric cell | `text-right tabular-nums` — **always** `tabular-nums` so digits align column-wise |
 | P&L cell | `text-right font-bold tabular-nums` + `text-up`/`text-down` by sign, with an explicit `+` |
 | Side cell | `font-semibold` + LONG `text-up` · SHORT `text-info` · LIQUIDATION `text-down` |
-| Empty state | `m-4.5 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface-wash-soft px-6 py-12 text-center` + icon + message + **recovery action** |
+| Empty state | **`shared/components/EmptyState`** — `icon` + `message` + `action`; the caller positions it (`className="m-4.5"`) |
 | Row actions cell *(2026-07-17)* | `flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100`; `Button variant="ghost" size="icon"`; delete adds `text-subtle-foreground hover:text-down`. Row gains `group`; `th` is `<span className="sr-only">Actions</span>` |
-| Footer | `flex items-center justify-between gap-4 border-t border-border p-4.5` — live count + Load more |
+| Footer / pager *(2026-07-17)* | `TradesPagination` — `flex flex-wrap items-center justify-between gap-4 border-t border-border p-4.5`; `Showing {from}–{to} of {total}` + shadcn `Pagination`. Page buttons `Button variant="default"` when current (+ `aria-current="page"`), `ghost` otherwise |
 
 **Pattern notes:**
 
@@ -445,14 +474,27 @@ File: `components/trades/TradesTable.tsx` · `components/overview/RecentTrades.t
   mounts a single `TradeFormDialog`; a dialog inside `Row` would mount one per visible row.
 - **Deleting is confirmed** via the imperative `confirm()` store, and the copy states the real
   consequence — the running balance of every later trade shifts, because `balanceAfter` is cumulative.
-- **`Load more` reveals 24 at a time** and the footer always states `Showing N of M`, so paging never
+- **Pagination is 50 rows a page** *(2026-07-17, replaced `Load more`)*. Maths lives in the pure
+  `lib/pagination.ts` (`PAGE_SIZE`, `pageSlice`, `pageWindow`), not the component. **`pageSlice`
+  clamps the page** rather than trusting it: a filter can shrink the set under someone on page 9, and
+  an unclamped slice returns `[]` — a blank table that reads as "no results" when the truth is "that
+  page stopped existing". **The page resets to 1 on a filter change, adjusted during render, not in an
+  effect** — an effect would paint the wrong rows for a frame first (and `react-hooks/set-state-in-effect`
+  rejects it). `pageWindow` keeps first + last always visible with `…` gaps, so 26 pages never render
+  26 buttons. Controls hide at a single page; the `Showing x–y of N` count never does.
+  - **Note:** with **19 trades** the ledger is one page, so no page buttons render. The previous
+    `Load more` (STEP 24) had the same blind spot and was never seen either. Verified against a
+    120-trade mock API: 3 pages, `Showing 101–120 of 120`, partial last page, next disabled at the end.
+- **The old `Load more`** revealed 24 at a time; the footer always stated `Showing N of M`, so paging never
   hides how much is left.
 - **`RecentTrades` is the glance's 6 rows, `TradesTable` is the ledger.** Both read `useCockpit()`, so
   they cannot disagree about the active view.
 
 ### Built — the performance calendar *(built 2026-07-17; redesigned same day against the TradeFXBook "Monthly P&L" reference)*
 
-Files: `components/calendar/CalendarHeatmap.tsx` · pure builder in `lib/calendar.ts`
+Files *(split one-per-file 2026-07-17)*: `components/calendar/` — `CalendarHeatmap.tsx` (the panel) ·
+`MonthNav.tsx` · `WeekRow.tsx` · `WeekCell.tsx` · `DayCell.tsx` (owns the tint constants + `cellTitle`).
+Pure builder in `lib/calendar.ts`; the hydration-safe clock in `hooks/useTodayKey.ts`.
 
 **Structure: month → weeks → days.** Not a flat day list. The week is a real row object carrying its
 own net and traded-day count, because the weekly column cannot be derived at render time from cells
@@ -625,6 +667,23 @@ text-foreground` · `CardDescription` (`text-body-sm text-muted-foreground`) · 
 `main` `flex min-h-screen items-center justify-center bg-background px-4 py-10` — a full-height
 centered container on the dark grid background, no app chrome. Reuse for any standalone centered page
 (404, a simple confirmation, a standalone form).
+
+---
+
+## EmptyState — the shared "nothing to draw" panel *(promoted 2026-07-17)*
+
+File: `shared/components/EmptyState.tsx` — `{ icon, message, action?, className? }`
+
+`flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface-wash-soft
+px-6 py-12 text-center`. The caller supplies position (`className="m-4.5"`), never the chrome.
+
+- **Promoted on its third use.** The ledger hand-repeated this markup for *both* of its empties while
+  the calendar kept a fourth copy, and they had already drifted in padding and radius. This is the
+  "promote on the second use" rule catching up with reality.
+- **`action` is a prop, not an assumption.** "No trades" means something different on an untouched
+  journal (add one) than under a filter (clear it), and the exit is what makes the difference legible.
+  A dead-end empty state makes the user hunt for the control that trapped them.
+- Lives in `shared/components/`, not `ui/` — it is a project composite, not a shadcn primitive.
 
 ---
 
